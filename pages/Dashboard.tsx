@@ -191,10 +191,6 @@ const Dashboard: React.FC = () => {
               </h2>
             </div>
           </div>
-          <button className="flex items-center justify-center size-10 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors relative">
-            <span className="material-symbols-outlined text-gray-700 dark:text-white">notifications</span>
-            <span className="absolute top-2.5 right-2.5 size-2 bg-primary rounded-full"></span>
-          </button>
         </div>
       </header>
 

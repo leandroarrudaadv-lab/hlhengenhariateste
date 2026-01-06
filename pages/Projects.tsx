@@ -193,7 +193,7 @@ const Projects: React.FC = () => {
       setUploading(true);
 
       const fileExt = newDocFile.name.split('.').pop();
-      const fileName = `${project.id}-${Math.random()}.${fileExt}`;
+      const fileName = `${project.id}-${Date.now()}.${fileExt}`;
       const filePath = `documents/${fileName}`;
 
       const { error: uploadError } = await supabase.storage
@@ -212,7 +212,7 @@ const Projects: React.FC = () => {
         author: newDoc.author,
         type: newDoc.type,
         date: new Date().toISOString().split('T')[0],
-        id: publicUrl // Using URL as ID for simple viewing logic update below
+        file_url: publicUrl
       };
 
       const { error } = await supabase
@@ -224,8 +224,10 @@ const Projects: React.FC = () => {
       fetchDocuments();
       setIsModalOpen(false);
       setNewDocFile(null);
-    } catch (error) {
+      setNewDoc({ name: '', type: 'pdf', author: 'Usuário Atual' });
+    } catch (error: any) {
       console.error('Error uploading document:', error);
+      alert(`Erro ao enviar documento: ${error.message || 'Tente novamente'}`);
     } finally {
       setUploading(false);
     }
@@ -555,10 +557,17 @@ const Projects: React.FC = () => {
               </button>
               <button
                 onClick={handleUpload}
-                disabled={!newDoc.name}
-                className="flex-1 py-3 bg-primary text-white rounded-xl font-bold shadow-lg shadow-primary/30 disabled:opacity-50 disabled:shadow-none transition-all"
+                disabled={!newDoc.name || uploading}
+                className="flex-1 py-3 bg-primary text-white rounded-xl font-bold shadow-lg shadow-primary/30 disabled:opacity-50 disabled:shadow-none transition-all flex items-center justify-center gap-2"
               >
-                Enviar
+                {uploading ? (
+                  <>
+                    <span className="material-symbols-outlined animate-spin">sync</span>
+                    Enviando...
+                  </>
+                ) : (
+                  'Enviar'
+                )}
               </button>
             </div>
           </div>
