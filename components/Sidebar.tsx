@@ -13,7 +13,7 @@ const Sidebar: React.FC = () => {
     const tabs = [
         { label: 'Painel', icon: 'dashboard', path: '/dashboard' },
         { label: 'Equipe', icon: 'groups', path: '/collaborators' },
-        { label: 'Perfil', icon: 'person', path: '/collaborator/1' }
+        { label: 'Perfil', icon: 'person', path: '/profile' }
     ];
 
     return (

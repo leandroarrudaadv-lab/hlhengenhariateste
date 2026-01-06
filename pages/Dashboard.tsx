@@ -2,20 +2,45 @@ import React, { useEffect, useState } from 'react';
 import { PROJECTS } from '../constants';
 import { Project, ProjectStatus } from '../types';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import ConfirmModal from '../components/ConfirmModal';
 import { supabase } from '../lib/supabase';
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [profileName, setProfileName] = useState<string>('');
 
   useEffect(() => {
     fetchProjects();
-  }, []);
+    if (user) {
+      fetchProfile();
+    }
+  }, [user]);
+
+  const fetchProfile = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('full_name')
+        .eq('id', user?.id)
+        .single();
+
+      if (error) throw error;
+      if (data?.full_name) {
+        setProfileName(data.full_name);
+      }
+    } catch (error) {
+      console.error('Error fetching profile for dashboard:', error);
+    }
+  };
 
   const fetchProjects = async () => {
+    // ... existing fetchProjects logic ...
+    // (Note: replacing from line 8 to somewhere around 53)
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -131,9 +156,9 @@ const Dashboard: React.FC = () => {
         if (error) throw error;
         setProjects(projects.filter(p => p.id !== projectToDelete));
         setProjectToDelete(null);
-      } catch (error) {
-        console.error('Error deleting project:', error);
-        alert('Erro ao excluir obra.');
+      } catch (error: any) {
+        console.error('Error deleting document:', error);
+        alert(`Erro ao excluir documento: ${error.message || 'Verifique sua conexão'}. ${error.hint || ''}`);
       }
     }
   };
@@ -152,14 +177,18 @@ const Dashboard: React.FC = () => {
           <div className="flex items-center gap-3">
             <div className="relative">
               <div
-                className="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 ring-2 ring-primary/20"
-                style={{ backgroundImage: `url('https://picsum.photos/seed/ricardo/100/100')` }}
-              ></div>
+                className="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10 ring-2 ring-primary/20 flex items-center justify-center bg-surface-light dark:bg-surface-dark"
+                style={user?.user_metadata?.avatar_url ? { backgroundImage: `url('${user.user_metadata.avatar_url}')` } : {}}
+              >
+                {!user?.user_metadata?.avatar_url && <span className="material-symbols-outlined text-gray-400">person</span>}
+              </div>
               <div className="absolute bottom-0 right-0 size-3 bg-green-500 rounded-full border-2 border-background-light dark:border-background-dark"></div>
             </div>
             <div>
               <p className="text-xs font-medium text-gray-500 dark:text-[#baab9c]">Bem-vindo de volta,</p>
-              <h2 className="text-lg font-bold leading-tight tracking-tight">Eng. Ricardo</h2>
+              <h2 className="text-lg font-bold leading-tight tracking-tight">
+                {profileName || (user?.email ? `Eng. ${user.email.split('@')[0]}` : 'Engenheiro')}
+              </h2>
             </div>
           </div>
           <button className="flex items-center justify-center size-10 rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors relative">

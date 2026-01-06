@@ -15,6 +15,7 @@ import { CollaboratorProvider } from './contexts/CollaboratorContext';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { ThemeProvider } from './contexts/ThemeContext';
 import Login from './pages/Login';
+import Profile from './pages/Profile';
 
 const ProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user, loading } = useAuth();
@@ -59,6 +60,7 @@ const App: React.FC = () => {
                         <Route path="/contracts" element={<Contracts />} />
                         <Route path="/purchases" element={<Purchases />} />
                         <Route path="/rdo" element={<RDOPage />} />
+                        <Route path="/profile" element={<Profile />} />
                         <Route path="/collaborators" element={<Collaborators />} />
                         <Route path="/collaborator/:id" element={<CollaboratorDetails />} />
                       </Routes>

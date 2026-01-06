@@ -100,11 +100,45 @@ const Projects: React.FC = () => {
   });
 
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const [uploading, setUploading] = useState(false);
+
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (file) {
-      const imageUrl = URL.createObjectURL(file);
-      setProjectImage(imageUrl);
+    if (!file) return;
+
+    try {
+      setUploading(true);
+
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${project.id}-${Math.random()}.${fileExt}`;
+      const filePath = `project-images/${fileName}`;
+
+      // 1. Upload to Supabase Storage
+      const { error: uploadError } = await supabase.storage
+        .from('images')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      // 2. Get Public URL
+      const { data: { publicUrl } } = supabase.storage
+        .from('images')
+        .getPublicUrl(filePath);
+
+      // 3. Update Project table
+      const { error: updateError } = await supabase
+        .from('projects')
+        .update({ image: publicUrl })
+        .eq('id', project.id);
+
+      if (updateError) throw updateError;
+
+      setProjectImage(publicUrl);
+    } catch (error: any) {
+      console.error('Error uploading image:', error);
+      alert(`Erro ao fazer upload da imagem: ${error.message || 'Verifique sua conexão'}`);
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -171,9 +205,9 @@ const Projects: React.FC = () => {
         if (error) throw error;
         setDocuments(prev => prev.filter(doc => doc.id !== docToDelete));
         setDocToDelete(null);
-      } catch (error) {
+      } catch (error: any) {
         console.error('Error deleting document:', error);
-        alert('Erro ao excluir documento.');
+        alert(`Erro ao excluir documento: ${error.message || 'Verifique sua conexão'}. ${error.hint || ''}`);
       }
     }
   };
