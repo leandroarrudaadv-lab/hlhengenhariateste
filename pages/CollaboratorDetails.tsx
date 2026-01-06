@@ -7,18 +7,20 @@ import { supabase } from '../lib/supabase';
 const CollaboratorDetails: React.FC = () => {
   const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
-  const { getCollaborator, updateCollaborator, removeCollaborator, loading: loadingContext } = useCollaborators();
+  const { getCollaborator, updateCollaborator, removeCollaborator, loading: loadingContext, fetchCollaborators } = useCollaborators();
 
   const [worker, setWorker] = useState<Collaborator | undefined>(undefined);
   const [projects, setProjects] = useState<any[]>([]);
   const [loadingProjects, setLoadingProjects] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   // Local form state
   const [formData, setFormData] = useState({
     name: '',
     role: '',
     salary: '',
-    currentProject: '',
+    currentProjectId: '',
     photo: ''
   });
 
@@ -41,6 +43,54 @@ const CollaboratorDetails: React.FC = () => {
     }
   };
 
+  const handlePhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !id) return;
+
+    try {
+      setUploading(true);
+      const fileExt = file.name.split('.').pop();
+      const fileName = `${id}-${Math.random()}.${fileExt}`;
+      const filePath = `collaborators/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('images')
+        .upload(filePath, file);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('images')
+        .getPublicUrl(filePath);
+
+      setFormData(prev => ({ ...prev, photo: publicUrl }));
+      // Auto-save the photo update
+      await updateCollaborator(id, { photo: publicUrl });
+      alert('Foto atualizada!');
+    } catch (error: any) {
+      console.error('Error uploading photo:', error);
+      alert(`Erro no upload: ${error.message}`);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleSave = async () => {
+    if (!id) return;
+    try {
+      setSaving(true);
+      await updateCollaborator(id, formData);
+      await fetchCollaborators(); // Force context update
+      alert('Dados salvos com sucesso!');
+      navigate(-1);
+    } catch (error: any) {
+      console.error('Error in handleSave:', error);
+      alert(`Erro ao salvar: ${error.message}`);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   useEffect(() => {
     if (id) {
       const found = getCollaborator(id);
@@ -50,7 +100,7 @@ const CollaboratorDetails: React.FC = () => {
           name: found.name,
           role: found.role,
           salary: found.salary,
-          currentProject: found.currentProject,
+          currentProjectId: found.currentProjectId || '',
           photo: found.photo
         });
       }
@@ -84,8 +134,12 @@ const CollaboratorDetails: React.FC = () => {
         </button>
         <h2 className="text-lg font-bold leading-tight tracking-[-0.015em] flex-1 text-center">Detalhes do Colaborador</h2>
         <div className="flex w-10 items-center justify-end">
-          <button className="text-primary font-bold text-base hover:text-orange-400 transition-colors">
-            Editar
+          <button
+            onClick={handleSave}
+            disabled={saving}
+            className="text-primary font-bold text-base hover:text-orange-400 disabled:opacity-50 transition-colors"
+          >
+            {saving ? '...' : 'Salvar'}
           </button>
         </div>
       </header>
@@ -102,9 +156,20 @@ const CollaboratorDetails: React.FC = () => {
               <span className="material-symbols-outlined text-[20px] font-bold">photo_camera</span>
             </div>
           </div>
-          <button className="text-cyan-brand hover:text-cyan-300 text-[16px] font-semibold tracking-[-0.015em] transition-colors">
-            Alterar foto
+          <button
+            onClick={() => document.getElementById('photo-input')?.click()}
+            disabled={uploading}
+            className="text-cyan-brand hover:text-cyan-300 text-[16px] font-semibold tracking-[-0.015em] transition-colors disabled:opacity-50"
+          >
+            {uploading ? 'Enviando...' : 'Alterar foto'}
           </button>
+          <input
+            id="photo-input"
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handlePhotoUpload}
+          />
         </div>
 
         {/* Form Fields */}
@@ -163,13 +228,13 @@ const CollaboratorDetails: React.FC = () => {
             <div className="relative">
               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-[#baab9c] material-symbols-outlined pointer-events-none">apartment</span>
               <select
-                value={formData.currentProject}
-                onChange={(e) => setFormData({ ...formData, currentProject: e.target.value })}
+                value={formData.currentProjectId}
+                onChange={(e) => setFormData({ ...formData, currentProjectId: e.target.value })}
                 className="flex w-full min-w-0 flex-1 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary border border-slate-300 dark:border-white/10 bg-white dark:bg-surface-dark h-14 pl-12 pr-10 text-base appearance-none transition-all"
               >
                 <option value="">Sem alocação (Disponível)</option>
                 {projects.map(p => (
-                  <option key={p.id} value={p.name}>{p.name}</option>
+                  <option key={p.id} value={p.id}>{p.name}</option>
                 ))}
               </select>
               <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 dark:text-[#baab9c] material-symbols-outlined pointer-events-none">unfold_more</span>
@@ -180,16 +245,16 @@ const CollaboratorDetails: React.FC = () => {
         {/* Actions */}
         <div className="px-4 mt-8 flex flex-col gap-3">
           <button
-            onClick={async () => {
-              if (id) {
-                await updateCollaborator(id, formData);
-                navigate(-1);
-              }
-            }}
-            className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 h-14 shadow-lg shadow-orange-900/20 active:scale-[0.98] transition-all"
+            onClick={handleSave}
+            disabled={saving || uploading}
+            className="flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 h-14 shadow-lg shadow-orange-900/20 active:scale-[0.98] transition-all disabled:opacity-70"
           >
-            <span className="material-symbols-outlined text-white">save</span>
-            <span className="text-white text-base font-bold">Salvar Alterações</span>
+            <span className={`material-symbols-outlined text-white ${saving ? 'animate-spin' : ''}`}>
+              {saving ? 'sync' : 'save'}
+            </span>
+            <span className="text-white text-base font-bold">
+              {saving ? 'Salvando...' : 'Salvar Alterações'}
+            </span>
           </button>
           <button
             onClick={async () => {

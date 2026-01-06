@@ -10,6 +10,7 @@ interface CollaboratorContextType {
     removeCollaborator: (id: string) => Promise<void>;
     updateCollaborator: (id: string, updates: Partial<Collaborator>) => Promise<void>;
     getCollaborator: (id: string) => Collaborator | undefined;
+    fetchCollaborators: () => Promise<void>;
 }
 
 const CollaboratorContext = createContext<CollaboratorContextType | undefined>(undefined);
@@ -41,6 +42,7 @@ export const CollaboratorProvider: React.FC<{ children: ReactNode }> = ({ childr
                     role: c.role,
                     salary: c.salary,
                     currentProject: c.projects?.name || '',
+                    currentProjectId: c.current_project_id || '',
                     photo: c.photo || `https://picsum.photos/seed/${c.id}/150/150`
                 })));
             }
@@ -54,15 +56,14 @@ export const CollaboratorProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     const addCollaborator = async (collaborator: Omit<Collaborator, 'id'>) => {
         try {
-            // Find project ID by name if needed, or we might need to change the API to take ID
-            // For now, assume we just insert.
             const { error } = await supabase
                 .from('collaborators')
                 .insert([{
                     name: collaborator.name,
                     role: collaborator.role,
                     salary: collaborator.salary,
-                    photo: collaborator.photo
+                    photo: collaborator.photo,
+                    current_project_id: collaborator.currentProjectId || null
                 }]);
 
             if (error) throw error;
@@ -88,15 +89,24 @@ export const CollaboratorProvider: React.FC<{ children: ReactNode }> = ({ childr
 
     const updateCollaborator = async (id: string, updates: Partial<Collaborator>) => {
         try {
+            // Map frontend camellCase to DB snake_case
+            const dbUpdates: any = {};
+            if (updates.name !== undefined) dbUpdates.name = updates.name;
+            if (updates.role !== undefined) dbUpdates.role = updates.role;
+            if (updates.salary !== undefined) dbUpdates.salary = updates.salary;
+            if (updates.photo !== undefined) dbUpdates.photo = updates.photo;
+            if (updates.currentProjectId !== undefined) dbUpdates.current_project_id = updates.currentProjectId || null;
+
             const { error } = await supabase
                 .from('collaborators')
-                .update(updates)
+                .update(dbUpdates)
                 .eq('id', id);
 
             if (error) throw error;
             await fetchCollaborators();
         } catch (error) {
             console.error('Error updating collaborator:', error);
+            alert('Erro ao atualizar colaborador. Verifique sua conexão.');
         }
     };
 
@@ -105,7 +115,7 @@ export const CollaboratorProvider: React.FC<{ children: ReactNode }> = ({ childr
     };
 
     return (
-        <CollaboratorContext.Provider value={{ collaborators, loading, addCollaborator, removeCollaborator, updateCollaborator, getCollaborator }}>
+        <CollaboratorContext.Provider value={{ collaborators, loading, addCollaborator, removeCollaborator, updateCollaborator, getCollaborator, fetchCollaborators }}>
             {children}
         </CollaboratorContext.Provider>
     );

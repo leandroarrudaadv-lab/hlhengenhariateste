@@ -23,6 +23,7 @@ export interface Collaborator {
   role: string;
   salary: string;
   currentProject: string;
+  currentProjectId?: string;
   photo: string;
 }
 

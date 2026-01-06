@@ -177,13 +177,13 @@ const Collaborators: React.FC = () => {
                             <div>
                                 <label className="text-xs font-bold text-gray-500 uppercase">Obra Atual</label>
                                 <select
-                                    value={newCollaborator.currentProject}
-                                    onChange={(e) => setNewCollaborator({ ...newCollaborator, currentProject: e.target.value })}
+                                    value={newCollaborator.currentProjectId}
+                                    onChange={(e) => setNewCollaborator({ ...newCollaborator, currentProjectId: e.target.value })}
                                     className="w-full mt-1 p-3 rounded-xl bg-gray-50 dark:bg-zinc-800 text-slate-900 dark:text-white border border-gray-200 dark:border-white/10 outline-none focus:ring-2 focus:ring-primary/50"
                                 >
                                     <option value="" className="bg-white dark:bg-zinc-800 text-slate-900 dark:text-white">Sem alocação</option>
                                     {activeProjects.map((p: any) => (
-                                        <option key={p.id} value={p.name} className="bg-white dark:bg-zinc-800 text-slate-900 dark:text-white">{p.name}</option>
+                                        <option key={p.id} value={p.id} className="bg-white dark:bg-zinc-800 text-slate-900 dark:text-white">{p.name}</option>
                                     ))}
                                 </select>
                             </div>
