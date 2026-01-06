@@ -1,0 +1,114 @@
+
+import React from 'react';
+import { PURCHASES } from '../constants';
+import { useNavigate } from 'react-router-dom';
+
+const Purchases: React.FC = () => {
+  const navigate = useNavigate();
+
+  return (
+    <div className="flex flex-col min-h-screen pb-24 bg-background-light dark:bg-background-dark">
+      <header className="sticky top-0 z-20 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-gray-200 dark:border-white/10 px-4 pt-4 pb-4">
+        <div className="flex items-center justify-between gap-4">
+          <button onClick={() => navigate(-1)} className="flex size-10 items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+            <span className="material-symbols-outlined">arrow_back</span>
+          </button>
+          <div className="flex-1 flex flex-col items-center">
+            <h2 className="text-base font-semibold leading-tight">Residencial Alphaville</h2>
+            <span className="text-xs text-slate-500 dark:text-gray-400">Compras da Obra</span>
+          </div>
+          <button className="flex size-10 items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+            <span className="material-symbols-outlined">tune</span>
+          </button>
+        </div>
+      </header>
+
+      <main className="flex-1 overflow-y-auto">
+        {/* Summary Card */}
+        <section className="p-4">
+          <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-surface-dark to-slate-900 border border-white/5 p-6 shadow-lg">
+            <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-primary/10 blur-xl"></div>
+            <div className="relative z-10 flex flex-col gap-1">
+              <div className="flex items-center gap-2 mb-1">
+                <span className="material-symbols-outlined text-primary text-[20px]">account_balance_wallet</span>
+                <p className="text-sm font-medium text-gray-400">Total Gasto</p>
+              </div>
+              <h3 className="text-3xl font-bold tracking-tight text-white">R$ 152.050,00</h3>
+              <div className="mt-4 flex items-center gap-2">
+                <div className="h-1.5 w-full bg-black/30 rounded-full overflow-hidden">
+                  <div className="h-full w-[75%] bg-primary rounded-full"></div>
+                </div>
+                <span className="text-xs font-medium text-primary">75%</span>
+              </div>
+              <p className="text-xs text-gray-500 mt-1">do orçamento previsto</p>
+            </div>
+          </div>
+        </section>
+
+        {/* Search */}
+        <section className="px-4 pb-2 sticky top-[85px] z-10 bg-background-light dark:bg-background-dark pt-2">
+          <div className="relative">
+            <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
+              <span className="material-symbols-outlined text-[20px]">search</span>
+            </div>
+            <input 
+              className="block w-full rounded-lg border-none bg-white dark:bg-surface-dark py-3 pl-10 pr-3 text-sm placeholder-gray-400 focus:ring-2 focus:ring-primary shadow-sm" 
+              placeholder="Buscar fornecedor ou item..." 
+              type="text" 
+            />
+          </div>
+        </section>
+
+        {/* List */}
+        <section className="px-4 py-2 space-y-3">
+          <h4 className="text-sm font-medium text-gray-500 uppercase tracking-wider pl-1 mt-2 mb-3">Recentes</h4>
+          {PURCHASES.map(item => (
+            <article 
+              key={item.id}
+              className="group relative flex items-center gap-4 rounded-xl bg-white dark:bg-surface-dark p-4 shadow-sm border border-gray-100 dark:border-white/5 transition-all hover:border-primary/50 active:scale-[0.99] cursor-pointer"
+            >
+              <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${
+                item.category === 'Locação' ? 'bg-blue-500/10 text-blue-500' : 
+                item.id === '4' ? 'bg-purple-500/10 text-purple-500' :
+                item.id === '2' ? 'bg-orange-500/10 text-orange-500' :
+                'bg-primary/10 text-primary'
+              }`}>
+                <span className="material-symbols-outlined">
+                  {item.category === 'Locação' ? 'handyman' : item.id === '4' ? 'format_paint' : item.id === '2' ? 'grid_view' : 'inventory_2'}
+                </span>
+              </div>
+              <div className="flex flex-1 flex-col justify-center min-w-0">
+                <div className="flex justify-between items-start">
+                  <h5 className="font-semibold truncate pr-2">{item.item}</h5>
+                  <span className="font-bold whitespace-nowrap">{item.price}</span>
+                </div>
+                <div className="flex justify-between items-end mt-1">
+                  <div className="flex flex-col">
+                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{item.supplier}</p>
+                    <p className="text-xs text-gray-400 dark:text-gray-500">{item.date}</p>
+                  </div>
+                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
+                    item.status === 'Pago' ? 'bg-cyan-brand/10 text-cyan-brand' : 'bg-yellow-500/10 text-yellow-500'
+                  }`}>
+                    {item.status}
+                  </span>
+                </div>
+              </div>
+              <span className="material-symbols-outlined text-gray-400">chevron_right</span>
+            </article>
+          ))}
+        </section>
+      </main>
+
+      {/* FAB */}
+      <div className="fixed bottom-20 right-6 z-30">
+        <button className="flex items-center gap-2 rounded-full bg-primary px-5 py-4 text-white shadow-xl shadow-primary/30 active:scale-95 transition-transform">
+          <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>add</span>
+          <span className="font-bold text-sm tracking-wide">Nova Compra</span>
+        </button>
+      </div>
+    </div>
+  );
+};
+
+export default Purchases;
