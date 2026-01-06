@@ -58,8 +58,15 @@ const Profile: React.FC = () => {
                 });
 
             if (error) throw error;
+
+            // Recarrega os dados para confirmar que foram salvos
+            await fetchProfile();
+
+            // Feedback visual de sucesso
+            alert('Perfil salvo com sucesso!');
         } catch (error: any) {
             console.error(`Erro ao salvar perfil: ${error.message}`);
+            alert(`Erro ao salvar perfil: ${error.message}`);
         } finally {
             setSaving(false);
         }

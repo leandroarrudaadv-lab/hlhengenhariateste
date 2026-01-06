@@ -96,11 +96,28 @@ const Projects: React.FC = () => {
 
   const handleStatusClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setStatusToChange(editedProject.status === ProjectStatus.IN_PROGRESS ? ProjectStatus.COMPLETED : ProjectStatus.IN_PROGRESS);
+
+    const newStatus = editedProject.status === ProjectStatus.IN_PROGRESS ? ProjectStatus.COMPLETED : ProjectStatus.IN_PROGRESS;
+
+    // Se está tentando mudar para Concluída, verifica se o progresso é 100%
+    if (newStatus === ProjectStatus.COMPLETED && editedProject.progress < 100) {
+      alert('A obra só pode ser marcada como Concluída quando o progresso atingir 100%');
+      return;
+    }
+
+    setStatusToChange(newStatus);
   };
 
   const confirmStatusChange = async () => {
     if (!statusToChange) return;
+
+    // Validação extra antes de salvar
+    if (statusToChange === ProjectStatus.COMPLETED && editedProject.progress < 100) {
+      alert('A obra só pode ser marcada como Concluída quando o progresso atingir 100%');
+      setStatusToChange(null);
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('projects')
