@@ -9,7 +9,7 @@ const Profile: React.FC = () => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [fullName, setFullName] = useState('');
-    const [avatarUrl, setAvatarUrl] = useState('');
+    const [role, setRole] = useState('Engenheiro Responsável');
 
     useEffect(() => {
         if (user) {
@@ -22,17 +22,16 @@ const Profile: React.FC = () => {
             setLoading(true);
             const { data, error } = await supabase
                 .from('profiles')
-                .select('full_name, avatar_url')
+                .select('full_name, role')
                 .eq('id', user?.id)
                 .single();
 
-            if (error && error.code !== 'PGRST116') throw error; // PGRST116 is code for no rows found
+            if (error && error.code !== 'PGRST116') throw error;
 
             if (data) {
                 setFullName(data.full_name || '');
-                setAvatarUrl(data.avatar_url || '');
+                if (data.role) setRole(data.role);
             } else {
-                // If profile doesn't exist, create it (fallback if trigger failed)
                 const { error: insertError } = await supabase
                     .from('profiles')
                     .insert([{ id: user?.id, full_name: user?.user_metadata?.full_name || '' }]);
@@ -54,14 +53,13 @@ const Profile: React.FC = () => {
                 .upsert({
                     id: user?.id,
                     full_name: fullName,
-                    avatar_url: avatarUrl,
+                    role: role,
                     updated_at: new Date().toISOString()
                 });
 
             if (error) throw error;
-            alert('Perfil atualizado com sucesso!');
         } catch (error: any) {
-            alert(`Erro ao salvar perfil: ${error.message}`);
+            console.error(`Erro ao salvar perfil: ${error.message}`);
         } finally {
             setSaving(false);
         }
@@ -76,7 +74,7 @@ const Profile: React.FC = () => {
     }
 
     return (
-        <div className="flex flex-col min-h-screen pb-20">
+        <div className="flex flex-col min-h-screen pb-20 bg-background-light dark:bg-background-dark">
             <header className="sticky top-0 z-30 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-gray-200 dark:border-white/5">
                 <div className="flex items-center justify-between px-4 py-3">
                     <button onClick={() => navigate(-1)} className="flex items-center justify-center w-10 h-10 -ml-2 rounded-full active:bg-gray-200 dark:active:bg-white/10 transition-colors">
@@ -89,18 +87,10 @@ const Profile: React.FC = () => {
 
             <main className="flex-1 px-4 py-8 max-w-md mx-auto w-full">
                 <div className="flex flex-col items-center mb-8">
-                    <div className="relative group">
-                        <div
-                            className="size-24 rounded-full bg-surface-light dark:bg-surface-dark border-4 border-white dark:border-white/5 shadow-xl bg-center bg-cover overflow-hidden flex items-center justify-center"
-                            style={avatarUrl ? { backgroundImage: `url('${avatarUrl}')` } : {}}
-                        >
-                            {!avatarUrl && <span className="material-symbols-outlined text-4xl text-gray-400">person</span>}
-                        </div>
-                        <button className="absolute bottom-0 right-0 bg-primary text-white size-8 rounded-full border-2 border-white dark:border-background-dark flex items-center justify-center shadow-lg active:scale-95 transition-transform">
-                            <span className="material-symbols-outlined text-[18px]">add_a_photo</span>
-                        </button>
+                    <div className="size-20 rounded-full bg-primary/10 flex items-center justify-center mb-2">
+                        <span className="material-symbols-outlined text-4xl text-primary">person</span>
                     </div>
-                    <p className="mt-4 text-xs font-semibold text-gray-400 uppercase tracking-widest">{user?.email}</p>
+                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-widest">{user?.email}</p>
                 </div>
 
                 <div className="space-y-6">
@@ -128,9 +118,10 @@ const Profile: React.FC = () => {
                             </span>
                             <input
                                 type="text"
-                                className="w-full pl-10 pr-4 py-3 rounded-xl bg-gray-50 dark:bg-zinc-800/30 border border-gray-200 dark:border-white/5 text-slate-400 cursor-not-allowed outline-none"
-                                value="Engenheiro Responsável"
-                                disabled
+                                value={role}
+                                onChange={(e) => setRole(e.target.value)}
+                                className="w-full pl-10 pr-4 py-3 rounded-xl bg-white dark:bg-surface-dark border border-gray-200 dark:border-white/10 text-slate-900 dark:text-white focus:ring-2 focus:ring-primary outline-none transition-all shadow-sm"
+                                placeholder="Seu cargo"
                             />
                         </div>
                     </div>
@@ -139,7 +130,7 @@ const Profile: React.FC = () => {
                         <button
                             onClick={handleSave}
                             disabled={saving}
-                            className="w-full py-4 bg-primary text-white rounded-xl font-bold shadow-lg shadow-primary/30 active:scale-[0.98] transition-all disabled:opacity-70 flex items-center justify-center gap-2"
+                            className={`w-full py-4 ${saving ? 'bg-primary/70' : 'bg-primary'} text-white rounded-xl font-bold shadow-lg shadow-primary/30 active:scale-[0.98] transition-all disabled:opacity-70 flex items-center justify-center gap-2`}
                         >
                             {saving ? (
                                 <span className="material-symbols-outlined animate-spin">sync</span>

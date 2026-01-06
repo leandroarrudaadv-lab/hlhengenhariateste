@@ -53,6 +53,7 @@ const Projects: React.FC = () => {
     type: 'pdf' as 'pdf' | 'dwg' | 'xlsx' | 'jpg',
     author: 'Usuário Atual'
   });
+  const [newDocFile, setNewDocFile] = useState<File | null>(null);
 
   const [projectImage, setProjectImage] = useState(project.image);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
@@ -60,6 +61,7 @@ const Projects: React.FC = () => {
   // Editing state
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editedProject, setEditedProject] = useState<Project>(project);
+  const [statusToChange, setStatusToChange] = useState<ProjectStatus | null>(null);
 
   // Sync editedProject with current project if navigation happens
 
@@ -82,10 +84,29 @@ const Projects: React.FC = () => {
 
       if (error) throw error;
       setIsEditModalOpen(false);
-      // We could navigate back or just stay here with updated state
     } catch (error) {
       console.error('Error updating project:', error);
-      alert('Erro ao salvar alterações.');
+    }
+  };
+
+  const handleStatusClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setStatusToChange(editedProject.status === ProjectStatus.IN_PROGRESS ? ProjectStatus.COMPLETED : ProjectStatus.IN_PROGRESS);
+  };
+
+  const confirmStatusChange = async () => {
+    if (!statusToChange) return;
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .update({ status: statusToChange })
+        .eq('id', project.id);
+
+      if (error) throw error;
+      setEditedProject(prev => ({ ...prev, status: statusToChange }));
+      setStatusToChange(null);
+    } catch (error) {
+      console.error('Error updating project status:', error);
     }
   };
 
@@ -163,29 +184,50 @@ const Projects: React.FC = () => {
   };
 
   const handleUpload = async () => {
+    if (!newDocFile) {
+      alert('Por favor, selecione um arquivo.');
+      return;
+    }
+
     try {
+      setUploading(true);
+
+      const fileExt = newDocFile.name.split('.').pop();
+      const fileName = `${project.id}-${Math.random()}.${fileExt}`;
+      const filePath = `documents/${fileName}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from('images') // Reusing images bucket
+        .upload(filePath, newDocFile);
+
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage
+        .from('images')
+        .getPublicUrl(filePath);
+
       const docData = {
         project_id: project.id,
         name: newDoc.name,
         author: newDoc.author,
         type: newDoc.type,
-        date: new Date().toISOString().split('T')[0] // YYYY-MM-DD
+        date: new Date().toISOString().split('T')[0],
+        id: publicUrl // Using URL as ID for simple viewing logic update below
       };
 
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('construction_documents')
-        .insert([docData])
-        .select();
+        .insert([docData]);
 
       if (error) throw error;
 
-      if (data) {
-        fetchDocuments();
-        setIsModalOpen(false);
-      }
+      fetchDocuments();
+      setIsModalOpen(false);
+      setNewDocFile(null);
     } catch (error) {
       console.error('Error uploading document:', error);
-      alert('Erro ao enviar documento.');
+    } finally {
+      setUploading(false);
     }
   };
 
@@ -264,10 +306,12 @@ const Projects: React.FC = () => {
           >
             <div className="flex flex-col justify-center flex-[2]">
               <div className="flex items-center justify-between mb-2">
-                <span className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${editedProject.status === ProjectStatus.IN_PROGRESS
-                  ? 'bg-cyan-brand/10 text-cyan-brand ring-cyan-brand/20'
-                  : 'bg-green-500/10 text-green-500 ring-green-500/20'
-                  }`}>
+                <span
+                  onClick={handleStatusClick}
+                  className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset cursor-pointer active:scale-95 transition-transform ${editedProject.status === ProjectStatus.IN_PROGRESS
+                    ? 'bg-cyan-brand/10 text-cyan-brand ring-cyan-brand/20'
+                    : 'bg-green-500/10 text-green-500 ring-green-500/20'
+                    }`}>
                   {editedProject.status}
                 </span>
                 <button
@@ -342,13 +386,6 @@ const Projects: React.FC = () => {
               className="flex-shrink-0 flex items-center justify-center px-4 py-2 rounded-full bg-cyan-brand/10 text-cyan-brand border border-cyan-brand/20 active:scale-95 transition-all text-sm font-bold whitespace-nowrap"
             >
               RDO
-            </button>
-            {/* Contratos Button */}
-            <button
-              onClick={() => navigate('/contracts', { state: { project } })}
-              className="flex-shrink-0 flex items-center justify-center px-4 py-2 rounded-full bg-primary/10 text-primary border border-primary/20 active:scale-95 transition-all text-sm font-bold whitespace-nowrap"
-            >
-              Contratos
             </button>
             {/* Compras Button */}
             <button
@@ -473,11 +510,28 @@ const Projects: React.FC = () => {
                 </select>
               </div>
 
-              {/* Upload Mock */}
-              <div className="border-2 border-dashed border-gray-300 dark:border-white/20 rounded-xl p-8 flex flex-col items-center justify-center text-gray-400 hover:border-primary hover:text-primary transition-colors cursor-pointer bg-gray-50 dark:bg-transparent">
-                <span className="material-symbols-outlined text-4xl mb-2">cloud_upload</span>
-                <p className="text-sm font-medium">Clique para selecionar o PDF</p>
-                <p className="text-xs opacity-70 mt-1">(Simulação de Upload)</p>
+              {/* Real Upload */}
+              <div>
+                <label className="text-xs font-bold text-gray-500 uppercase">Arquivo</label>
+                <div
+                  onClick={() => document.getElementById('doc-file-input')?.click()}
+                  className={`mt-1 border-2 border-dashed rounded-xl p-8 flex flex-col items-center justify-center transition-colors cursor-pointer bg-gray-50 dark:bg-transparent ${newDocFile ? 'border-primary text-primary' : 'border-gray-300 dark:border-white/20 text-gray-400 hover:border-primary hover:text-primary'}`}
+                >
+                  <span className="material-symbols-outlined text-4xl mb-2">{newDocFile ? 'task' : 'cloud_upload'}</span>
+                  <p className="text-sm font-medium">{newDocFile ? newDocFile.name : 'Clique para selecionar o arquivo'}</p>
+                </div>
+                <input
+                  id="doc-file-input"
+                  type="file"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) {
+                      setNewDocFile(file);
+                      if (!newDoc.name) setNewDoc({ ...newDoc, name: file.name.split('.')[0] });
+                    }
+                  }}
+                />
               </div>
 
               <div>
@@ -567,6 +621,14 @@ const Projects: React.FC = () => {
           </div>
         </div>
       )}
+      <ConfirmModal
+        isOpen={statusToChange !== null}
+        title="Alterar Status da Obra"
+        message={`Deseja alterar o status desta obra para "${statusToChange}"?`}
+        onConfirm={confirmStatusChange}
+        onCancel={() => setStatusToChange(null)}
+        confirmText="Confirmar"
+      />
       <ConfirmModal
         isOpen={docToDelete !== null}
         title="Excluir Documento"

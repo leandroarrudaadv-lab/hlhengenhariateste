@@ -13,6 +13,15 @@ const Purchases: React.FC = () => {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [newPurchase, setNewPurchase] = useState({
+    item: '',
+    supplier: '',
+    price: '',
+    category: 'Material',
+    status: 'Pendente'
+  });
 
   useEffect(() => {
     fetchPurchases();
@@ -58,6 +67,40 @@ const Purchases: React.FC = () => {
     p.supplier.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
+  const handleAddPurchase = async () => {
+    if (!project?.id) return;
+    try {
+      setSaving(true);
+      const { error } = await supabase
+        .from('purchases')
+        .insert([{
+          project_id: project.id,
+          item: newPurchase.item,
+          supplier: newPurchase.supplier || 'N/A',
+          price: newPurchase.price,
+          category: newPurchase.category,
+          status: 'Pendente',
+          date: new Date().toISOString().split('T')[0]
+        }]);
+
+      if (error) throw error;
+
+      fetchPurchases();
+      setIsModalOpen(false);
+      setNewPurchase({
+        item: '',
+        supplier: '',
+        price: '',
+        category: 'Material',
+        status: 'Pendente'
+      });
+    } catch (error) {
+      console.error('Error adding purchase:', error);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="flex flex-col min-h-screen pb-24 bg-background-light dark:bg-background-dark">
       <header className="sticky top-0 z-20 bg-background-light/95 dark:bg-background-dark/95 backdrop-blur-md border-b border-gray-200 dark:border-white/10 px-4 pt-4 pb-4">
@@ -79,7 +122,6 @@ const Purchases: React.FC = () => {
         {/* Summary Card */}
         <section className="p-4">
           <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-surface-dark to-slate-900 border border-white/5 p-6 shadow-lg">
-            <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-primary/10 blur-xl"></div>
             <div className="relative z-10 flex flex-col gap-1">
               <div className="flex items-center gap-2 mb-1">
                 <span className="material-symbols-outlined text-primary text-[20px]">account_balance_wallet</span>
@@ -88,13 +130,6 @@ const Purchases: React.FC = () => {
               <h3 className="text-3xl font-bold tracking-tight text-white">
                 {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalSpent)}
               </h3>
-              <div className="mt-4 flex items-center gap-2">
-                <div className="h-1.5 w-full bg-black/30 rounded-full overflow-hidden">
-                  <div className="h-full w-[75%] bg-primary rounded-full"></div>
-                </div>
-                <span className="text-xs font-medium text-primary">75%</span>
-              </div>
-              <p className="text-xs text-gray-500 mt-1">do orçamento previsto</p>
             </div>
           </div>
         </section>
@@ -135,9 +170,9 @@ const Purchases: React.FC = () => {
                 className="group relative flex items-center gap-4 rounded-xl bg-white dark:bg-surface-dark p-4 shadow-sm border border-gray-100 dark:border-white/5 transition-all hover:border-primary/50 active:scale-[0.99] cursor-pointer"
               >
                 <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${item.category === 'Locação' ? 'bg-blue-500/10 text-blue-500' :
-                    item.id === '4' ? 'bg-purple-500/10 text-purple-500' :
-                      item.id === '2' ? 'bg-orange-500/10 text-orange-500' :
-                        'bg-primary/10 text-primary'
+                  item.id === '4' ? 'bg-purple-500/10 text-purple-500' :
+                    item.id === '2' ? 'bg-orange-500/10 text-orange-500' :
+                      'bg-primary/10 text-primary'
                   }`}>
                   <span className="material-symbols-outlined">
                     {item.category === 'Locação' ? 'handyman' : item.id === '4' ? 'format_paint' : item.id === '2' ? 'grid_view' : 'inventory_2'}
@@ -168,11 +203,86 @@ const Purchases: React.FC = () => {
 
       {/* FAB */}
       <div className="fixed bottom-20 right-6 z-30">
-        <button className="flex items-center gap-2 rounded-full bg-primary px-5 py-4 text-white shadow-xl shadow-primary/30 active:scale-95 transition-transform">
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="flex items-center gap-2 rounded-full bg-primary px-5 py-4 text-white shadow-xl shadow-primary/30 active:scale-95 transition-transform"
+        >
           <span className="material-symbols-outlined" style={{ fontSize: '24px' }}>add</span>
           <span className="font-bold text-sm tracking-wide">Nova Compra</span>
         </button>
       </div>
+
+      {/* Add Purchase Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 px-4">
+          <div className="bg-white dark:bg-surface-dark w-full max-w-md rounded-2xl p-6 shadow-2xl animate-in fade-in zoom-in duration-200">
+            <h2 className="text-xl font-bold mb-4 text-slate-800 dark:text-white">Nova Compra</h2>
+            <div className="space-y-4">
+              <div>
+                <label className="text-xs font-bold text-gray-500 uppercase ml-1">Item / Material</label>
+                <input
+                  type="text"
+                  value={newPurchase.item}
+                  onChange={e => setNewPurchase({ ...newPurchase, item: e.target.value })}
+                  className="w-full mt-1 p-3 rounded-xl bg-gray-50 dark:bg-zinc-800 text-slate-800 dark:text-white border border-gray-200 dark:border-white/10 outline-none focus:ring-2 focus:ring-primary/50"
+                  placeholder="Ex: Cimento, Areia..."
+                />
+              </div>
+              <div>
+                <label className="text-xs font-bold text-gray-500 uppercase ml-1">Fornecedor</label>
+                <input
+                  type="text"
+                  value={newPurchase.supplier}
+                  onChange={e => setNewPurchase({ ...newPurchase, supplier: e.target.value })}
+                  className="w-full mt-1 p-3 rounded-xl bg-gray-50 dark:bg-zinc-800 text-slate-800 dark:text-white border border-gray-200 dark:border-white/10 outline-none focus:ring-2 focus:ring-primary/50"
+                  placeholder="Ex: Materiais de Construção Silva"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase ml-1">Preço</label>
+                  <input
+                    type="text"
+                    value={newPurchase.price}
+                    onChange={e => setNewPurchase({ ...newPurchase, price: e.target.value })}
+                    className="w-full mt-1 p-3 rounded-xl bg-gray-50 dark:bg-zinc-800 text-slate-800 dark:text-white border border-gray-200 dark:border-white/10 outline-none focus:ring-2 focus:ring-primary/50"
+                    placeholder="R$ 0,00"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-bold text-gray-500 uppercase ml-1">Categoria</label>
+                  <select
+                    value={newPurchase.category}
+                    onChange={e => setNewPurchase({ ...newPurchase, category: e.target.value })}
+                    className="w-full mt-1 p-3 rounded-xl bg-gray-50 dark:bg-zinc-800 text-slate-800 dark:text-white border border-gray-200 dark:border-white/10 outline-none focus:ring-2 focus:ring-primary/50"
+                  >
+                    <option value="Material">Material</option>
+                    <option value="Ferramenta">Ferramenta</option>
+                    <option value="Locação">Locação</option>
+                    <option value="Serviço">Serviço</option>
+                    <option value="Outros">Outros</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 mt-6">
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="flex-1 py-3 text-gray-500 font-bold hover:bg-gray-100 dark:hover:bg-white/5 rounded-xl transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleAddPurchase}
+                disabled={saving || !newPurchase.item || !newPurchase.price}
+                className="flex-1 py-3 bg-primary text-white rounded-xl font-bold shadow-lg shadow-primary/30 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+              >
+                {saving ? <span className="material-symbols-outlined animate-spin">sync</span> : 'Adicionar'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

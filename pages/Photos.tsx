@@ -1,6 +1,7 @@
 
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import ConfirmModal from '../components/ConfirmModal';
 
 const Photos: React.FC = () => {
   const navigate = useNavigate();
@@ -19,6 +20,7 @@ const Photos: React.FC = () => {
     const saved = localStorage.getItem('gallery_photos');
     return saved ? JSON.parse(saved) : MOCK_PHOTOS;
   });
+  const [photoToDelete, setPhotoToDelete] = useState<number | null>(null);
 
   // Save to localStorage whenever photos change
   React.useEffect(() => {
@@ -28,7 +30,7 @@ const Photos: React.FC = () => {
   const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      Array.from(files).forEach(file => {
+      Array.from(files).forEach((file: File) => {
         const reader = new FileReader();
         reader.onloadend = () => {
           const base64String = reader.result as string;
@@ -81,7 +83,7 @@ const Photos: React.FC = () => {
                   className="text-white hover:text-red-400"
                   onClick={(e) => {
                     e.stopPropagation();
-                    setPhotos(photos.filter((_, i) => i !== index));
+                    setPhotoToDelete(index);
                   }}
                 >
                   <span className="material-symbols-outlined text-sm">delete</span>
@@ -92,6 +94,19 @@ const Photos: React.FC = () => {
         </div>
       </main>
 
+      <ConfirmModal
+        isOpen={photoToDelete !== null}
+        title="Excluir Foto"
+        message="Tem certeza que deseja excluir esta foto da galeria?"
+        onConfirm={() => {
+          if (photoToDelete !== null) {
+            setPhotos(photos.filter((_, i) => i !== photoToDelete));
+            setPhotoToDelete(null);
+          }
+        }}
+        onCancel={() => setPhotoToDelete(null)}
+        confirmText="Excluir"
+      />
       <input
         type="file"
         multiple
