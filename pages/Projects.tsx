@@ -64,6 +64,9 @@ const Projects: React.FC = () => {
   const [editedProject, setEditedProject] = useState<Project>(project);
   const [statusToChange, setStatusToChange] = useState<ProjectStatus | null>(null);
 
+  // Document viewer state
+  const [viewingDoc, setViewingDoc] = useState<any>(null);
+
   // Sync editedProject with current project if navigation happens
 
   // Sync editedProject with current project if navigation happens
@@ -260,7 +263,7 @@ const Projects: React.FC = () => {
   const handleViewDocument = (doc: any, e: React.MouseEvent) => {
     e.stopPropagation();
     if (doc.fileUrl) {
-      window.open(doc.fileUrl, '_blank');
+      setViewingDoc(doc);
     } else {
       alert('URL do arquivo não disponível');
     }
@@ -658,6 +661,66 @@ const Projects: React.FC = () => {
         onCancel={() => setDocToDelete(null)}
         confirmText="Excluir"
       />
+
+      {/* Document Viewer Modal */}
+      {viewingDoc && (
+        <div className="fixed inset-0 z-[70] flex items-center justify-center bg-black/90 p-4">
+          <div className="relative w-full h-full max-w-6xl max-h-[90vh] bg-white dark:bg-surface-dark rounded-2xl overflow-hidden shadow-2xl flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between p-4 border-b border-gray-200 dark:border-white/10">
+              <div className="flex-1 min-w-0">
+                <h3 className="text-lg font-bold truncate">{viewingDoc.name}</h3>
+                <p className="text-sm text-gray-500">{viewingDoc.author} • {viewingDoc.date}</p>
+              </div>
+              <div className="flex items-center gap-2 ml-4">
+                <button
+                  onClick={() => {
+                    const link = document.createElement('a');
+                    link.href = viewingDoc.fileUrl;
+                    link.download = viewingDoc.name;
+                    link.click();
+                  }}
+                  className="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+                >
+                  <span className="material-symbols-outlined text-[20px]">download</span>
+                  Baixar
+                </button>
+                <button
+                  onClick={() => setViewingDoc(null)}
+                  className="flex items-center justify-center w-10 h-10 rounded-full hover:bg-gray-100 dark:hover:bg-white/10 transition-colors"
+                >
+                  <span className="material-symbols-outlined">close</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="flex-1 overflow-hidden bg-gray-100 dark:bg-zinc-900">
+              {viewingDoc.type === 'pdf' ? (
+                <iframe
+                  src={viewingDoc.fileUrl}
+                  className="w-full h-full"
+                  title={viewingDoc.name}
+                />
+              ) : viewingDoc.type === 'jpg' || viewingDoc.type === 'png' ? (
+                <div className="w-full h-full flex items-center justify-center p-4">
+                  <img
+                    src={viewingDoc.fileUrl}
+                    alt={viewingDoc.name}
+                    className="max-w-full max-h-full object-contain"
+                  />
+                </div>
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center text-gray-500">
+                  <span className="material-symbols-outlined text-6xl mb-4">description</span>
+                  <p className="text-lg font-medium">Visualização não disponível para este tipo de arquivo</p>
+                  <p className="text-sm mt-2">Clique em "Baixar" para abrir o arquivo</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
