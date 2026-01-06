@@ -33,6 +33,7 @@ export interface ConstructionDocument {
   date: string;
   author: string;
   type: 'pdf' | 'dwg' | 'xlsx' | 'jpg';
+  fileUrl?: string;
 }
 
 export interface Contract {

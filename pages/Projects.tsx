@@ -38,7 +38,8 @@ const Projects: React.FC = () => {
           name: d.name,
           date: new Date(d.date).toLocaleDateString('pt-BR'),
           author: d.author,
-          type: d.type as any
+          type: d.type as any,
+          fileUrl: d.file_url
         })));
       }
     } catch (error) {
@@ -115,7 +116,7 @@ const Projects: React.FC = () => {
   const filteredDocuments = documents.filter(doc => {
     if (activeTab === 'Todos') return true;
     if (activeTab === 'Plantas') return doc.type === 'dwg' || doc.name.toLowerCase().includes('planta') || doc.name.toLowerCase().includes('projeto');
-    if (activeTab === 'Contratos') return doc.name.toLowerCase().includes('contrato');
+    if (activeTab === 'Contratos') return doc.type === 'pdf' || doc.name.toLowerCase().includes('contrato');
     if (activeTab === 'Relatórios') return doc.type === 'xlsx' || doc.name.toLowerCase().includes('relatório') || doc.name.toLowerCase().includes('orçamento');
     return true;
   });
@@ -256,14 +257,25 @@ const Projects: React.FC = () => {
     }
   };
 
-  const handleViewDocument = (doc: ConstructionDocument, e: React.MouseEvent) => {
+  const handleViewDocument = (doc: any, e: React.MouseEvent) => {
     e.stopPropagation();
-    alert(`Visualizando documento: ${doc.name}\n(Funcionalidade simulada)`);
+    if (doc.fileUrl) {
+      window.open(doc.fileUrl, '_blank');
+    } else {
+      alert('URL do arquivo não disponível');
+    }
   };
 
-  const handleDownloadDocument = (doc: ConstructionDocument, e: React.MouseEvent) => {
+  const handleDownloadDocument = (doc: any, e: React.MouseEvent) => {
     e.stopPropagation();
-    alert(`Baixando documento: ${doc.name}\n(Funcionalidade simulada)`);
+    if (doc.fileUrl) {
+      const link = document.createElement('a');
+      link.href = doc.fileUrl;
+      link.download = doc.name;
+      link.click();
+    } else {
+      console.log('Downloading document:', doc.name);
+    }
   };
 
   const getIcon = (type: string) => {
