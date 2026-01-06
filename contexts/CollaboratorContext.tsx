@@ -1,40 +1,103 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
+import React, { createContext, useContext, useState, ReactNode, useEffect } from 'react';
 import { Collaborator } from '../types';
 import { COLLABORATORS } from '../constants';
+import { supabase } from '../lib/supabase';
 
 interface CollaboratorContextType {
     collaborators: Collaborator[];
-    addCollaborator: (collaborator: Collaborator) => void;
-    removeCollaborator: (id: string) => void;
-    updateCollaborator: (id: string, updates: Partial<Collaborator>) => void;
+    loading: boolean;
+    addCollaborator: (collaborator: Omit<Collaborator, 'id'>) => Promise<void>;
+    removeCollaborator: (id: string) => Promise<void>;
+    updateCollaborator: (id: string, updates: Partial<Collaborator>) => Promise<void>;
     getCollaborator: (id: string) => Collaborator | undefined;
 }
 
 const CollaboratorContext = createContext<CollaboratorContextType | undefined>(undefined);
 
 export const CollaboratorProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-    const [collaborators, setCollaborators] = useState<Collaborator[]>(() => {
-        const saved = localStorage.getItem('collaborators');
-        return saved ? JSON.parse(saved) : COLLABORATORS;
-    });
+    const [collaborators, setCollaborators] = useState<Collaborator[]>([]);
+    const [loading, setLoading] = useState(true);
 
-    // Save to localStorage whenever collaborators change
-    React.useEffect(() => {
-        localStorage.setItem('collaborators', JSON.stringify(collaborators));
-    }, [collaborators]);
+    useEffect(() => {
+        fetchCollaborators();
+    }, []);
 
-    const addCollaborator = (collaborator: Collaborator) => {
-        setCollaborators((prev) => [...prev, collaborator]);
+    const fetchCollaborators = async () => {
+        try {
+            setLoading(true);
+            const { data, error } = await supabase
+                .from('collaborators')
+                .select(`
+                    *,
+                    projects (name)
+                `);
+
+            if (error) throw error;
+
+            if (data) {
+                setCollaborators(data.map(c => ({
+                    id: c.id,
+                    name: c.name,
+                    role: c.role,
+                    salary: c.salary,
+                    currentProject: c.projects?.name || '',
+                    photo: c.photo || `https://picsum.photos/seed/${c.id}/150/150`
+                })));
+            }
+        } catch (error) {
+            console.error('Error fetching collaborators:', error);
+            setCollaborators(COLLABORATORS);
+        } finally {
+            setLoading(false);
+        }
     };
 
-    const removeCollaborator = (id: string) => {
-        setCollaborators((prev) => prev.filter((c) => c.id !== id));
+    const addCollaborator = async (collaborator: Omit<Collaborator, 'id'>) => {
+        try {
+            // Find project ID by name if needed, or we might need to change the API to take ID
+            // For now, assume we just insert.
+            const { error } = await supabase
+                .from('collaborators')
+                .insert([{
+                    name: collaborator.name,
+                    role: collaborator.role,
+                    salary: collaborator.salary,
+                    photo: collaborator.photo
+                }]);
+
+            if (error) throw error;
+            await fetchCollaborators();
+        } catch (error) {
+            console.error('Error adding collaborator:', error);
+        }
     };
 
-    const updateCollaborator = (id: string, updates: Partial<Collaborator>) => {
-        setCollaborators((prev) =>
-            prev.map((c) => (c.id === id ? { ...c, ...updates } : c))
-        );
+    const removeCollaborator = async (id: string) => {
+        try {
+            const { error } = await supabase
+                .from('collaborators')
+                .delete()
+                .eq('id', id);
+
+            if (error) throw error;
+            setCollaborators(prev => prev.filter(c => c.id !== id));
+        } catch (error) {
+            console.error('Error removing collaborator:', error);
+        }
+    };
+
+    const updateCollaborator = async (id: string, updates: Partial<Collaborator>) => {
+        try {
+            const { error } = await supabase
+                .from('collaborators')
+                .update(updates)
+                .eq('id', id);
+
+            if (error) throw error;
+            await fetchCollaborators();
+        } catch (error) {
+            console.error('Error updating collaborator:', error);
+        }
     };
 
     const getCollaborator = (id: string) => {
@@ -42,7 +105,7 @@ export const CollaboratorProvider: React.FC<{ children: ReactNode }> = ({ childr
     };
 
     return (
-        <CollaboratorContext.Provider value={{ collaborators, addCollaborator, removeCollaborator, updateCollaborator, getCollaborator }}>
+        <CollaboratorContext.Provider value={{ collaborators, loading, addCollaborator, removeCollaborator, updateCollaborator, getCollaborator }}>
             {children}
         </CollaboratorContext.Provider>
     );

@@ -1,13 +1,52 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CONTRACTS } from '../constants';
-import { useNavigate } from 'react-router-dom';
-import { Contract } from '../types';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Contract, Project } from '../types';
 import ConfirmModal from '../components/ConfirmModal';
+import { supabase } from '../lib/supabase';
 
 const Contracts: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const project = (location.state as { project: Project })?.project;
+
   const [activeSegment, setActiveSegment] = useState<'clients' | 'suppliers'>('suppliers');
-  const [contracts, setContracts] = useState<Contract[]>(CONTRACTS);
+  const [contracts, setContracts] = useState<Contract[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchContracts();
+  }, [project?.id]);
+
+  const fetchContracts = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('contracts')
+        .select('*')
+        .eq('project_id', project?.id);
+
+      if (error) throw error;
+
+      if (data) {
+        setContracts(data.map(c => ({
+          id: c.id,
+          name: c.name,
+          supplier: c.supplier,
+          status: c.status as any,
+          expiry: c.expiry_date,
+          value: c.value,
+          code: c.code
+        })));
+      }
+    } catch (error) {
+      console.error('Error fetching contracts:', error);
+      setContracts(CONTRACTS);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [contractToDelete, setContractToDelete] = useState<string | null>(null);
   const [newContract, setNewContract] = useState({
@@ -26,25 +65,40 @@ const Contracts: React.FC = () => {
     contract.code.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  const handleAddContract = () => {
-    const contract: Contract = {
-      id: (contracts.length + 1).toString(),
-      name: newContract.name,
-      supplier: newContract.supplier,
-      status: newContract.status,
-      expiry: `R$ ${newContract.value}`, // Using expiry field to show value as requested or separate field
-      value: newContract.value,
-      code: newContract.code
-    };
-    setContracts([contract, ...contracts]);
-    setIsModalOpen(false);
-    setNewContract({
-      name: '',
-      supplier: '',
-      value: '',
-      status: 'Ativo',
-      code: `CT-2023-${Math.floor(Math.random() * 1000)}`
-    });
+  const handleAddContract = async () => {
+    try {
+      const contractData = {
+        project_id: project?.id,
+        name: newContract.name,
+        supplier: newContract.supplier,
+        status: newContract.status,
+        value: newContract.value,
+        code: newContract.code,
+        expiry_date: new Date().toLocaleDateString('pt-BR') // Fallback date
+      };
+
+      const { data, error } = await supabase
+        .from('contracts')
+        .insert([contractData])
+        .select();
+
+      if (error) throw error;
+
+      if (data) {
+        fetchContracts();
+        setIsModalOpen(false);
+        setNewContract({
+          name: '',
+          supplier: '',
+          value: '',
+          status: 'Ativo',
+          code: `CT-2023-${Math.floor(Math.random() * 1000)}`
+        });
+      }
+    } catch (error) {
+      console.error('Error adding contract:', error);
+      alert('Erro ao adicionar contrato.');
+    }
   };
 
   const handleDeleteClick = (id: string, e: React.MouseEvent) => {
@@ -52,10 +106,21 @@ const Contracts: React.FC = () => {
     setContractToDelete(id);
   };
 
-  const confirmDeleteContract = () => {
+  const confirmDeleteContract = async () => {
     if (contractToDelete) {
-      setContracts(contracts.filter(c => c.id !== contractToDelete));
-      setContractToDelete(null);
+      try {
+        const { error } = await supabase
+          .from('contracts')
+          .delete()
+          .eq('id', contractToDelete);
+
+        if (error) throw error;
+        setContracts(contracts.filter(c => c.id !== contractToDelete));
+        setContractToDelete(null);
+      } catch (error) {
+        console.error('Error deleting contract:', error);
+        alert('Erro ao excluir contrato.');
+      }
     }
   };
 
@@ -79,9 +144,9 @@ const Contracts: React.FC = () => {
         <div className="mb-6">
           <p className="text-sm font-medium text-slate-500 dark:text-slate-400 mb-1 uppercase tracking-wider">Obra Selecionada</p>
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold tracking-tight">Residencial Jardins</h1>
+            <h1 className="text-2xl font-bold tracking-tight">{project?.name || 'Projeto não selecionado'}</h1>
             <div className="size-10 rounded-full overflow-hidden bg-surface-dark border border-white/10 shrink-0">
-              <img src="https://picsum.photos/seed/building1/100/100" className="h-full w-full object-cover" alt="" />
+              <img src={project?.image || "https://picsum.photos/seed/building1/100/100"} className="h-full w-full object-cover" alt="" />
             </div>
           </div>
         </div>
@@ -133,62 +198,69 @@ const Contracts: React.FC = () => {
         </div>
 
         {/* List */}
-        <div className="space-y-4">
-          <div className="flex items-center justify-between px-1">
-            <h3 className="font-bold text-base">Ativos recentemente</h3>
-            <button className="text-xs font-medium text-cyan-brand hover:underline">Ver todos</button>
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-12 text-gray-500">
+            <span className="material-symbols-outlined animate-spin text-4xl mb-2">sync</span>
+            <p>Carregando contratos...</p>
           </div>
-
-          {filteredContracts.map(contract => (
-            <div
-              key={contract.id}
-              className="group relative bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-slate-100 dark:border-white/5 active:scale-[0.99] transition-transform duration-100 cursor-pointer"
-            >
-              <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                <button
-                  type="button"
-                  onClick={(e) => handleDeleteClick(contract.id, e)}
-                  className="p-1 text-slate-400 hover:text-red-500 transition-colors"
-                >
-                  <span className="material-symbols-outlined text-[20px]">delete</span>
-                </button>
-              </div>
-              <div className="flex justify-between items-start mb-2">
-                <div className="flex items-center gap-3">
-                  <div className={`size-10 rounded-lg flex items-center justify-center shrink-0 ${contract.status === 'Ativo' ? 'bg-primary/10 text-primary' :
-                    contract.status === 'Pendente' ? 'bg-cyan-brand/10 text-cyan-brand' :
-                      contract.status === 'Atenção' ? 'bg-orange-500/10 text-orange-500' :
-                        'bg-slate-500/10 text-slate-500'
+        ) : filteredContracts.length === 0 ? (
+          <div className="text-center py-12 text-gray-500">
+            <span className="material-symbols-outlined text-4xl mb-2">description</span>
+            <p>Nenhum contrato encontrado.</p>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {filteredContracts.map(contract => (
+              <div
+                key={contract.id}
+                className="group relative bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-slate-100 dark:border-white/5 active:scale-[0.99] transition-transform duration-100 cursor-pointer"
+              >
+                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  <button
+                    type="button"
+                    onClick={(e) => handleDeleteClick(contract.id, e)}
+                    className="p-1 text-slate-400 hover:text-red-500 transition-colors"
+                  >
+                    <span className="material-symbols-outlined text-[20px]">delete</span>
+                  </button>
+                </div>
+                <div className="flex justify-between items-start mb-2">
+                  <div className="flex items-center gap-3">
+                    <div className={`size-10 rounded-lg flex items-center justify-center shrink-0 ${contract.status === 'Ativo' ? 'bg-primary/10 text-primary' :
+                      contract.status === 'Pendente' ? 'bg-cyan-brand/10 text-cyan-brand' :
+                        contract.status === 'Atenção' ? 'bg-orange-500/10 text-orange-500' :
+                          'bg-slate-500/10 text-slate-500'
+                      }`}>
+                      <span className="material-symbols-outlined">
+                        {contract.id === '4' ? 'architecture' : contract.id === '3' ? 'bolt' : contract.id === '2' ? 'format_paint' : 'handshake'}
+                      </span>
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-sm line-clamp-1">{contract.name}</h4>
+                      <p className="text-slate-500 dark:text-slate-400 text-xs">{contract.supplier}</p>
+                    </div>
+                  </div>
+                  <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium border ${contract.status === 'Ativo' ? 'bg-green-500/10 text-green-600 border-green-500/20' :
+                    contract.status === 'Pendente' ? 'bg-primary/10 text-primary border-primary/20' :
+                      contract.status === 'Atenção' ? 'bg-red-500/10 text-red-600 border-red-500/20' :
+                        'bg-slate-500/10 text-slate-500 border-slate-200'
                     }`}>
-                    <span className="material-symbols-outlined">
-                      {contract.id === '4' ? 'architecture' : contract.id === '3' ? 'bolt' : contract.id === '2' ? 'format_paint' : 'handshake'}
-                    </span>
-                  </div>
-                  <div>
-                    <h4 className="font-bold text-sm line-clamp-1">{contract.name}</h4>
-                    <p className="text-slate-500 dark:text-slate-400 text-xs">{contract.supplier}</p>
-                  </div>
-                </div>
-                <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-medium border ${contract.status === 'Ativo' ? 'bg-green-500/10 text-green-600 border-green-500/20' :
-                  contract.status === 'Pendente' ? 'bg-primary/10 text-primary border-primary/20' :
-                    contract.status === 'Atenção' ? 'bg-red-500/10 text-red-600 border-red-500/20' :
-                      'bg-slate-500/10 text-slate-500 border-slate-200'
-                  }`}>
-                  {contract.status}
-                </span>
-              </div>
-              <div className="mt-3 pt-3 border-t border-slate-100 dark:border-white/5 flex items-center justify-between text-xs">
-                <div className={`flex items-center gap-1.5 ${contract.status === 'Atenção' ? 'text-red-500' : contract.status === 'Pendente' ? 'text-primary' : 'text-slate-500 dark:text-slate-400'}`}>
-                  <span className="material-symbols-outlined text-[16px]">
-                    payments
+                    {contract.status}
                   </span>
-                  <span>{contract.value ? `R$ ${contract.value}` : contract.expiry}</span>
                 </div>
-                <span className="font-semibold">{contract.code}</span>
+                <div className="mt-3 pt-3 border-t border-slate-100 dark:border-white/5 flex items-center justify-between text-xs">
+                  <div className={`flex items-center gap-1.5 ${contract.status === 'Atenção' ? 'text-red-500' : contract.status === 'Pendente' ? 'text-primary' : 'text-slate-500 dark:text-slate-400'}`}>
+                    <span className="material-symbols-outlined text-[16px]">
+                      payments
+                    </span>
+                    <span>{contract.value ? `R$ ${contract.value}` : contract.expiry}</span>
+                  </div>
+                  <span className="font-semibold">{contract.code}</span>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </main>
 
       {/* FAB */}

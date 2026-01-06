@@ -1,18 +1,56 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { PROJECTS } from '../constants';
-import { ProjectStatus } from '../types';
+import { Project, ProjectStatus } from '../types';
 import { useNavigate } from 'react-router-dom';
 import ConfirmModal from '../components/ConfirmModal';
+import { supabase } from '../lib/supabase';
 
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const [searchQuery, setSearchQuery] = React.useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [projects, setProjects] = useState<Project[]>([]);
 
-  // Initialize projects from localStorage or constant
-  const [projects, setProjects] = React.useState<typeof PROJECTS>(() => {
-    const saved = localStorage.getItem('projects');
-    return saved ? JSON.parse(saved) : PROJECTS;
-  });
+  useEffect(() => {
+    fetchProjects();
+  }, []);
+
+  const fetchProjects = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('projects')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      // If no projects in DB, use constants as fallback/initial data
+      if (!data || data.length === 0) {
+        setProjects(PROJECTS);
+      } else {
+        // Map DB fields to TS Interface if naming differs (using camelCase in types, snake_case in DB)
+        const mappedProjects: Project[] = data.map(p => ({
+          id: p.id,
+          name: p.name,
+          location: p.location,
+          progress: Number(p.progress),
+          status: p.status as ProjectStatus,
+          image: p.image,
+          description: p.description,
+          startDate: p.start_date,
+          endDate: p.end_date,
+          mapsUrl: p.maps_url
+        }));
+        setProjects(mappedProjects);
+      }
+    } catch (error) {
+      console.error('Error fetching projects:', error);
+      setProjects(PROJECTS);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const [isModalOpen, setIsModalOpen] = React.useState(false);
   const [projectToDelete, setProjectToDelete] = React.useState<string | null>(null);
@@ -25,43 +63,56 @@ const Dashboard: React.FC = () => {
     mapsUrl: ''
   });
 
-  const handleAddProject = () => {
-    const project = {
-      id: Date.now().toString(),
-      name: newProject.name,
-      location: newProject.location,
-      progress: 0,
-      status: ProjectStatus.IN_PROGRESS,
-      image: `https://picsum.photos/seed/${newProject.name}/400/400`, // Auto-generated image for new projects
-      description: newProject.description,
-      startDate: newProject.startDate,
-      endDate: newProject.endDate,
-      mapsUrl: newProject.mapsUrl
-    };
+  const handleAddProject = async () => {
+    try {
+      const projectData = {
+        name: newProject.name,
+        location: newProject.location,
+        progress: 0,
+        status: ProjectStatus.IN_PROGRESS,
+        image: `https://picsum.photos/seed/${newProject.name}/400/400`,
+        description: newProject.description,
+        start_date: newProject.startDate,
+        end_date: newProject.endDate,
+        maps_url: newProject.mapsUrl
+      };
 
-    setProjects([project, ...projects]);
-    setIsModalOpen(false);
-    setNewProject({ name: '', location: '', description: '', startDate: '', endDate: '', mapsUrl: '' });
+      const { data, error } = await supabase
+        .from('projects')
+        .insert([projectData])
+        .select();
+
+      if (error) throw error;
+
+      if (data) {
+        // Refresh projects local state or refetch
+        fetchProjects();
+        setIsModalOpen(false);
+        setNewProject({ name: '', location: '', description: '', startDate: '', endDate: '', mapsUrl: '' });
+      }
+    } catch (error) {
+      console.error('Error adding project:', error);
+      alert('Erro ao criar obra. Verifique sua conexão.');
+    }
   };
 
-  // Save to localStorage whenever projects change
-  React.useEffect(() => {
-    localStorage.setItem('projects', JSON.stringify(projects));
-  }, [projects]);
+  const toggleProjectStatus = async (e: React.MouseEvent, projectId: string, currentStatus: ProjectStatus) => {
+    e.stopPropagation();
+    try {
+      const newStatus = currentStatus === ProjectStatus.IN_PROGRESS
+        ? ProjectStatus.COMPLETED
+        : ProjectStatus.IN_PROGRESS;
 
-  const toggleProjectStatus = (e: React.MouseEvent, projectId: string) => {
-    e.stopPropagation(); // Prevent navigation
-    setProjects(projects.map(p => {
-      if (p.id === projectId) {
-        return {
-          ...p,
-          status: p.status === ProjectStatus.IN_PROGRESS
-            ? ProjectStatus.COMPLETED
-            : ProjectStatus.IN_PROGRESS
-        };
-      }
-      return p;
-    }));
+      const { error } = await supabase
+        .from('projects')
+        .update({ status: newStatus })
+        .eq('id', projectId);
+
+      if (error) throw error;
+      fetchProjects();
+    } catch (error) {
+      console.error('Error updating status:', error);
+    }
   };
 
   const handleDeleteClick = (e: React.MouseEvent, projectId: string) => {
@@ -69,11 +120,21 @@ const Dashboard: React.FC = () => {
     setProjectToDelete(projectId);
   };
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (projectToDelete) {
-      const updatedProjects = projects.filter(p => p.id !== projectToDelete);
-      setProjects(updatedProjects);
-      setProjectToDelete(null);
+      try {
+        const { error } = await supabase
+          .from('projects')
+          .delete()
+          .eq('id', projectToDelete);
+
+        if (error) throw error;
+        setProjects(projects.filter(p => p.id !== projectToDelete));
+        setProjectToDelete(null);
+      } catch (error) {
+        console.error('Error deleting project:', error);
+        alert('Erro ao excluir obra.');
+      }
     }
   };
 
@@ -152,7 +213,12 @@ const Dashboard: React.FC = () => {
           <h3 className="text-lg font-bold">Obras Recentes</h3>
         </div>
         <div className="flex flex-col gap-4">
-          {filteredProjects.map(project => (
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+              <span className="material-symbols-outlined animate-spin text-4xl mb-2">sync</span>
+              <p>Carregando obras...</p>
+            </div>
+          ) : filteredProjects.map(project => (
             <div
               key={project.id}
               onClick={() => navigate('/projects', { state: { project } })}
@@ -180,7 +246,7 @@ const Dashboard: React.FC = () => {
                     <span className="material-symbols-outlined text-[18px]">delete</span>
                   </button>
                   <button
-                    onClick={(e) => toggleProjectStatus(e, project.id)}
+                    onClick={(e) => toggleProjectStatus(e, project.id, project.status)}
                     className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset transition-colors z-10 hover:opacity-80 active:scale-95 ${project.status === ProjectStatus.IN_PROGRESS
                       ? 'bg-cyan-brand/10 text-cyan-brand ring-cyan-brand/20'
                       : 'bg-green-500/10 text-green-500 ring-green-500/20'
@@ -215,6 +281,12 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
           ))}
+          {!loading && filteredProjects.length === 0 && (
+            <div className="text-center py-12 text-gray-400">
+              <span className="material-symbols-outlined text-4xl mb-2">sentiment_dissatisfied</span>
+              <p>Nenhuma obra encontrada.</p>
+            </div>
+          )}
         </div>
       </div>
 

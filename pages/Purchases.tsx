@@ -1,10 +1,62 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { PURCHASES } from '../constants';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
+import { Project, Purchase } from '../types';
+import { supabase } from '../lib/supabase';
 
 const Purchases: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const project = (location.state as { project: Project })?.project;
+
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    fetchPurchases();
+  }, [project?.id]);
+
+  const fetchPurchases = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('purchases')
+        .select('*')
+        .eq('project_id', project?.id)
+        .order('date', { ascending: false });
+
+      if (error) throw error;
+
+      if (data) {
+        setPurchases(data.map(p => ({
+          id: p.id,
+          item: p.item,
+          supplier: p.supplier,
+          price: p.price,
+          date: p.date,
+          category: p.category,
+          status: p.status as any
+        })));
+      }
+    } catch (error) {
+      console.error('Error fetching purchases:', error);
+      setPurchases(PURCHASES);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const totalSpent = purchases.reduce((acc, curr) => {
+    const val = parseFloat(curr.price.replace(/[^\d,]/g, '').replace(',', '.'));
+    return acc + (isNaN(val) ? 0 : val);
+  }, 0);
+
+  const filteredPurchases = purchases.filter(p =>
+    p.item.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    p.supplier.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="flex flex-col min-h-screen pb-24 bg-background-light dark:bg-background-dark">
@@ -14,7 +66,7 @@ const Purchases: React.FC = () => {
             <span className="material-symbols-outlined">arrow_back</span>
           </button>
           <div className="flex-1 flex flex-col items-center">
-            <h2 className="text-base font-semibold leading-tight">Residencial Alphaville</h2>
+            <h2 className="text-base font-semibold leading-tight">{project?.name || 'Residencial Alphaville'}</h2>
             <span className="text-xs text-slate-500 dark:text-gray-400">Compras da Obra</span>
           </div>
           <button className="flex size-10 items-center justify-center rounded-full hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
@@ -33,7 +85,9 @@ const Purchases: React.FC = () => {
                 <span className="material-symbols-outlined text-primary text-[20px]">account_balance_wallet</span>
                 <p className="text-sm font-medium text-gray-400">Total Gasto</p>
               </div>
-              <h3 className="text-3xl font-bold tracking-tight text-white">R$ 152.050,00</h3>
+              <h3 className="text-3xl font-bold tracking-tight text-white">
+                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalSpent)}
+              </h3>
               <div className="mt-4 flex items-center gap-2">
                 <div className="h-1.5 w-full bg-black/30 rounded-full overflow-hidden">
                   <div className="h-full w-[75%] bg-primary rounded-full"></div>
@@ -51,10 +105,12 @@ const Purchases: React.FC = () => {
             <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none text-gray-400">
               <span className="material-symbols-outlined text-[20px]">search</span>
             </div>
-            <input 
-              className="block w-full rounded-lg border-none bg-white dark:bg-surface-dark py-3 pl-10 pr-3 text-sm placeholder-gray-400 focus:ring-2 focus:ring-primary shadow-sm" 
-              placeholder="Buscar fornecedor ou item..." 
-              type="text" 
+            <input
+              className="block w-full rounded-lg border-none bg-white dark:bg-surface-dark py-3 pl-10 pr-3 text-sm placeholder-gray-400 focus:ring-2 focus:ring-primary shadow-sm text-slate-900 dark:text-white"
+              placeholder="Buscar fornecedor ou item..."
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
             />
           </div>
         </section>
@@ -62,41 +118,51 @@ const Purchases: React.FC = () => {
         {/* List */}
         <section className="px-4 py-2 space-y-3">
           <h4 className="text-sm font-medium text-gray-500 uppercase tracking-wider pl-1 mt-2 mb-3">Recentes</h4>
-          {PURCHASES.map(item => (
-            <article 
-              key={item.id}
-              className="group relative flex items-center gap-4 rounded-xl bg-white dark:bg-surface-dark p-4 shadow-sm border border-gray-100 dark:border-white/5 transition-all hover:border-primary/50 active:scale-[0.99] cursor-pointer"
-            >
-              <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${
-                item.category === 'Locação' ? 'bg-blue-500/10 text-blue-500' : 
-                item.id === '4' ? 'bg-purple-500/10 text-purple-500' :
-                item.id === '2' ? 'bg-orange-500/10 text-orange-500' :
-                'bg-primary/10 text-primary'
-              }`}>
-                <span className="material-symbols-outlined">
-                  {item.category === 'Locação' ? 'handyman' : item.id === '4' ? 'format_paint' : item.id === '2' ? 'grid_view' : 'inventory_2'}
-                </span>
-              </div>
-              <div className="flex flex-1 flex-col justify-center min-w-0">
-                <div className="flex justify-between items-start">
-                  <h5 className="font-semibold truncate pr-2">{item.item}</h5>
-                  <span className="font-bold whitespace-nowrap">{item.price}</span>
-                </div>
-                <div className="flex justify-between items-end mt-1">
-                  <div className="flex flex-col">
-                    <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{item.supplier}</p>
-                    <p className="text-xs text-gray-400 dark:text-gray-500">{item.date}</p>
-                  </div>
-                  <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${
-                    item.status === 'Pago' ? 'bg-cyan-brand/10 text-cyan-brand' : 'bg-yellow-500/10 text-yellow-500'
+          {loading ? (
+            <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+              <span className="material-symbols-outlined animate-spin text-4xl mb-2">sync</span>
+              <p>Carregando compras...</p>
+            </div>
+          ) : filteredPurchases.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <span className="material-symbols-outlined text-4xl mb-2">shopping_bag</span>
+              <p>Nenhuma compra encontrada.</p>
+            </div>
+          ) : (
+            filteredPurchases.map(item => (
+              <article
+                key={item.id}
+                className="group relative flex items-center gap-4 rounded-xl bg-white dark:bg-surface-dark p-4 shadow-sm border border-gray-100 dark:border-white/5 transition-all hover:border-primary/50 active:scale-[0.99] cursor-pointer"
+              >
+                <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${item.category === 'Locação' ? 'bg-blue-500/10 text-blue-500' :
+                    item.id === '4' ? 'bg-purple-500/10 text-purple-500' :
+                      item.id === '2' ? 'bg-orange-500/10 text-orange-500' :
+                        'bg-primary/10 text-primary'
                   }`}>
-                    {item.status}
+                  <span className="material-symbols-outlined">
+                    {item.category === 'Locação' ? 'handyman' : item.id === '4' ? 'format_paint' : item.id === '2' ? 'grid_view' : 'inventory_2'}
                   </span>
                 </div>
-              </div>
-              <span className="material-symbols-outlined text-gray-400">chevron_right</span>
-            </article>
-          ))}
+                <div className="flex flex-1 flex-col justify-center min-w-0">
+                  <div className="flex justify-between items-start">
+                    <h5 className="font-semibold truncate pr-2">{item.item}</h5>
+                    <span className="font-bold whitespace-nowrap">{item.price}</span>
+                  </div>
+                  <div className="flex justify-between items-end mt-1">
+                    <div className="flex flex-col">
+                      <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{item.supplier}</p>
+                      <p className="text-xs text-gray-400 dark:text-gray-500">{item.date}</p>
+                    </div>
+                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${item.status === 'Pago' ? 'bg-cyan-brand/10 text-cyan-brand' : 'bg-yellow-500/10 text-yellow-500'
+                      }`}>
+                      {item.status}
+                    </span>
+                  </div>
+                </div>
+                <span className="material-symbols-outlined text-gray-400">chevron_right</span>
+              </article>
+            ))
+          )}
         </section>
       </main>
 

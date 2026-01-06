@@ -1,23 +1,41 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useCollaborators } from '../contexts/CollaboratorContext';
 import { Collaborator, ProjectStatus } from '../types';
 import { PROJECTS } from '../constants';
 import ConfirmModal from '../components/ConfirmModal';
+import { supabase } from '../lib/supabase';
 
 const Collaborators: React.FC = () => {
     const navigate = useNavigate();
-    const { collaborators, addCollaborator, removeCollaborator } = useCollaborators();
+    const { collaborators, loading, addCollaborator, removeCollaborator } = useCollaborators();
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [collaboratorToDelete, setCollaboratorToDelete] = useState<string | null>(null);
+    const [projects, setProjects] = useState<any[]>([]);
+    const [loadingProjects, setLoadingProjects] = useState(true);
 
-    // Load projects for the dropdown
-    const [projects] = useState(() => {
-        const saved = localStorage.getItem('projects');
-        return saved ? JSON.parse(saved) : PROJECTS;
-    });
+    useEffect(() => {
+        fetchProjects();
+    }, []);
 
-    const activeProjects = projects.filter((p: any) => p.status === ProjectStatus.IN_PROGRESS);
+    const fetchProjects = async () => {
+        try {
+            setLoadingProjects(true);
+            const { data, error } = await supabase
+                .from('projects')
+                .select('id, name, status')
+                .eq('status', 'Em Andamento');
+
+            if (error) throw error;
+            setProjects(data || []);
+        } catch (error) {
+            console.error('Error fetching projects:', error);
+        } finally {
+            setLoadingProjects(false);
+        }
+    };
+
+    const activeProjects = projects;
 
     const [newCollaborator, setNewCollaborator] = useState({
         name: '',
@@ -26,17 +44,19 @@ const Collaborators: React.FC = () => {
         currentProject: '',
     });
 
-    const handleAddCollaborator = () => {
-        const id = (collaborators.length + 1).toString();
-        const collaborator: Collaborator = {
-            id,
+    const handleAddCollaborator = async () => {
+        // Find project ID from name (simplified for now, ideally we use ID in state)
+        // Since we are moving to Supabase, we should ideally use project_id in the DB.
+        // For now, I'll just save the name to match current UI and context logic.
+
+        await addCollaborator({
             name: newCollaborator.name,
             role: newCollaborator.role,
             salary: newCollaborator.salary,
-            currentProject: newCollaborator.currentProject, // This will be empty string for "Sem Alocação"
-            photo: `https://picsum.photos/seed/${id}/150/150`, // Random photo
-        };
-        addCollaborator(collaborator);
+            photo: `https://picsum.photos/seed/${Date.now()}/150/150`,
+            currentProject: newCollaborator.currentProject
+        });
+
         setIsModalOpen(false);
         setNewCollaborator({ name: '', role: 'Mestre de Obras', salary: '', currentProject: '' });
     };
@@ -67,45 +87,50 @@ const Collaborators: React.FC = () => {
             </header>
 
             <main className="flex flex-col p-4 gap-4">
-                {collaborators.map((collaborator) => (
-                    <div
-                        key={collaborator.id}
-                        className="flex flex-col bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-white/5"
-                    >
-                        <div className="flex items-start gap-4">
-                            <img
-                                src={collaborator.photo}
-                                alt={collaborator.name}
-                                className="w-16 h-16 rounded-full object-cover border-2 border-primary/20 cursor-pointer"
-                                onClick={() => navigate(`/collaborator/${collaborator.id}`)}
-                            />
-                            <div
-                                className="flex-1 min-w-0 cursor-pointer"
-                                onClick={() => navigate(`/collaborator/${collaborator.id}`)}
-                            >
-                                <h3 className="font-bold text-lg leading-tight truncate">{collaborator.name}</h3>
-                                <p className="text-cyan-brand font-medium text-sm">{collaborator.role}</p>
-                                <div className="flex items-center gap-1 mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                    <span className="material-symbols-outlined text-[14px]">apartment</span>
-                                    <span>{collaborator.currentProject || 'Sem alocação'}</span>
-                                </div>
-                            </div>
-                            <button
-                                type="button"
-                                onClick={() => handleDeleteClick(collaborator.id)}
-                                className="text-gray-400 hover:text-red-500 transition-colors p-1"
-                            >
-                                <span className="material-symbols-outlined">delete</span>
-                            </button>
-                        </div>
+                {loading || loadingProjects ? (
+                    <div className="flex flex-col items-center justify-center py-20 text-gray-500">
+                        <span className="material-symbols-outlined animate-spin text-4xl mb-2">sync</span>
+                        <p>Carregando equipe...</p>
                     </div>
-                ))}
-
-                {collaborators.length === 0 && (
+                ) : collaborators.length === 0 ? (
                     <div className="text-center py-10 text-gray-500">
                         <span className="material-symbols-outlined text-4xl mb-2">groups</span>
                         <p>Nenhum colaborador encontrado.</p>
                     </div>
+                ) : (
+                    collaborators.map((collaborator) => (
+                        <div
+                            key={collaborator.id}
+                            className="flex flex-col bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-white/5"
+                        >
+                            <div className="flex items-start gap-4">
+                                <img
+                                    src={collaborator.photo}
+                                    alt={collaborator.name}
+                                    className="w-16 h-16 rounded-full object-cover border-2 border-primary/20 cursor-pointer"
+                                    onClick={() => navigate(`/collaborator/${collaborator.id}`)}
+                                />
+                                <div
+                                    className="flex-1 min-w-0 cursor-pointer"
+                                    onClick={() => navigate(`/collaborator/${collaborator.id}`)}
+                                >
+                                    <h3 className="font-bold text-lg leading-tight truncate">{collaborator.name}</h3>
+                                    <p className="text-cyan-brand font-medium text-sm">{collaborator.role}</p>
+                                    <div className="flex items-center gap-1 mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                        <span className="material-symbols-outlined text-[14px]">apartment</span>
+                                        <span>{collaborator.currentProject || 'Sem alocação'}</span>
+                                    </div>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => handleDeleteClick(collaborator.id)}
+                                    className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                                >
+                                    <span className="material-symbols-outlined">delete</span>
+                                </button>
+                            </div>
+                        </div>
+                    ))
                 )}
             </main>
 

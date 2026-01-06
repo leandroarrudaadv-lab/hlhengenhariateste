@@ -1,42 +1,68 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { RDOS } from '../constants';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import ConfirmModal from '../components/ConfirmModal';
+import { Project, RDO } from '../types';
+import { supabase } from '../lib/supabase';
 
 const RDOPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const project = (location.state as { project: Project })?.project;
 
-  // Initialize state from localStorage or defaults
-  const [rdos, setRdos] = React.useState<typeof RDOS>(() => {
-    const saved = localStorage.getItem('rdos');
-    return saved ? JSON.parse(saved) : RDOS;
-  });
+  const [loading, setLoading] = useState(true);
+  const [rdos, setRdos] = useState<RDO[]>([]);
+  const [progress, setProgress] = useState(project?.progress || 0);
 
-  const [progress, setProgress] = React.useState(() => {
-    const saved = localStorage.getItem('projectProgress');
-    return saved ? parseInt(saved) : 68;
-  });
+  useEffect(() => {
+    if (project?.id) {
+      fetchRdos();
+    }
+  }, [project?.id]);
 
-  const [isModalOpen, setIsModalOpen] = React.useState(false);
-  const [rdoToDelete, setRdoToDelete] = React.useState<string | null>(null);
-  const [editingRdo, setEditingRdo] = React.useState<Partial<typeof RDOS[0]>>({});
-  const [isEditingProgress, setIsEditingProgress] = React.useState(false);
+  const fetchRdos = async () => {
+    try {
+      setLoading(true);
+      const { data, error } = await supabase
+        .from('rdos')
+        .select('*')
+        .eq('project_id', project?.id)
+        .order('full_date', { ascending: false });
 
-  // Persistence effects
-  React.useEffect(() => {
-    localStorage.setItem('rdos', JSON.stringify(rdos));
-  }, [rdos]);
+      if (error) throw error;
 
-  React.useEffect(() => {
-    localStorage.setItem('projectProgress', progress.toString());
-  }, [progress]);
+      if (data) {
+        setRdos(data.map(r => {
+          const d = new Date(r.full_date + 'T12:00:00');
+          return {
+            id: r.id,
+            date: d.getDate().toString(),
+            month: d.toLocaleString('pt-BR', { month: 'short' }).replace('.', '').toUpperCase(),
+            day: d.toLocaleDateString('pt-BR', { weekday: 'long' }),
+            status: r.status,
+            description: r.description,
+            weather: r.weather,
+            workers: r.workers,
+            hasIssue: r.has_issue,
+            fullDate: r.full_date
+          } as RDO;
+        }));
+      }
+    } catch (error) {
+      console.error('Error fetching RDOs:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const handleOpenModal = (rdo?: typeof RDOS[0]) => {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [rdoToDelete, setRdoToDelete] = useState<string | null>(null);
+  const [editingRdo, setEditingRdo] = useState<Partial<RDO>>({});
+  const [isEditingProgress, setIsEditingProgress] = useState(false);
+
+  const handleOpenModal = (rdo?: RDO) => {
     if (rdo) {
-      // Find the date in YYYY-MM-DD format if possible, otherwise use today
-      // For existing mock data, we might not have the full year/month easily, 
-      // so we use today's date as default for editing if not found.
-      setEditingRdo({ ...rdo, fullDate: new Date().toISOString().split('T')[0] });
+      setEditingRdo(rdo);
     } else {
       setEditingRdo({
         status: 'Em Andamento',
@@ -54,40 +80,74 @@ const RDOPage: React.FC = () => {
     setRdoToDelete(id);
   };
 
-  const confirmDeleteRdo = () => {
+  const confirmDeleteRdo = async () => {
     if (rdoToDelete) {
-      setRdos(rdos.filter(r => r.id !== rdoToDelete));
-      setRdoToDelete(null);
+      try {
+        const { error } = await supabase
+          .from('rdos')
+          .delete()
+          .eq('id', rdoToDelete);
+
+        if (error) throw error;
+        setRdos(prev => prev.filter(r => r.id !== rdoToDelete));
+        setRdoToDelete(null);
+      } catch (error) {
+        console.error('Error deleting RDO:', error);
+      }
     }
   };
 
-  const handleSave = () => {
-    const selectedDate = editingRdo.fullDate ? new Date(editingRdo.fullDate + 'T12:00:00') : new Date();
+  const handleSave = async () => {
+    try {
+      if (!project?.id) return;
 
-    const formattedRdo = {
-      ...editingRdo,
-      date: selectedDate.getDate().toString(),
-      month: selectedDate.toLocaleString('pt-BR', { month: 'short' }).replace('.', '').toUpperCase(),
-      day: selectedDate.toLocaleDateString('pt-BR', { weekday: 'long' }),
-    };
+      const rdoData = {
+        project_id: project.id,
+        full_date: editingRdo.fullDate,
+        status: editingRdo.status,
+        description: editingRdo.description,
+        weather: editingRdo.weather,
+        workers: editingRdo.workers,
+        has_issue: editingRdo.hasIssue
+      };
 
-    if (editingRdo.id) {
-      // Edit
-      setRdos(rdos.map(r => (r.id === editingRdo.id ? { ...r, ...formattedRdo } as typeof RDOS[0] : r)));
-    } else {
-      // Add
-      const newRdo = {
-        ...formattedRdo,
-        id: Date.now().toString(),
-      } as typeof RDOS[0];
-      setRdos([newRdo, ...rdos]);
+      if (editingRdo.id) {
+        // Update
+        const { error } = await supabase
+          .from('rdos')
+          .update(rdoData)
+          .eq('id', editingRdo.id);
+        if (error) throw error;
+      } else {
+        // Insert
+        const { error } = await supabase
+          .from('rdos')
+          .insert([rdoData]);
+        if (error) throw error;
+      }
+
+      fetchRdos();
+      setIsModalOpen(false);
+    } catch (error) {
+      console.error('Error saving RDO:', error);
+      alert('Erro ao salvar relatório.');
     }
-    setIsModalOpen(false);
   };
 
-  const handleProgressChange = (newProgress: number) => {
+  const handleProgressChange = async (newProgress: number) => {
     let value = Math.max(0, Math.min(100, newProgress));
     setProgress(value);
+
+    if (project?.id) {
+      try {
+        await supabase
+          .from('projects')
+          .update({ progress: value })
+          .eq('id', project.id);
+      } catch (error) {
+        console.error('Error updating project progress:', error);
+      }
+    }
   };
 
   return (
@@ -99,7 +159,7 @@ const RDOPage: React.FC = () => {
           </button>
           <div className="flex flex-col items-center">
             <span className="text-xs font-medium text-slate-500 dark:text-slate-400 uppercase tracking-wider">Obra</span>
-            <h1 className="text-lg font-bold leading-tight tracking-tight">Residencial Jardins</h1>
+            <h1 className="text-lg font-bold leading-tight tracking-tight">{project?.name || 'Residencial Jardins'}</h1>
           </div>
           <button className="flex items-center justify-center p-2 -mr-2 rounded-full hover:bg-black/5 dark:hover:bg-white/5 relative">
             <span className="material-symbols-outlined">notifications</span>
@@ -176,7 +236,17 @@ const RDOPage: React.FC = () => {
       </div>
 
       <main className="flex flex-col gap-3 px-4 pb-4">
-        {rdos.map(rdo => (
+        {loading ? (
+          <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+            <span className="material-symbols-outlined animate-spin text-4xl mb-2">sync</span>
+            <p>Carregando relatórios...</p>
+          </div>
+        ) : rdos.length === 0 ? (
+          <div className="text-center py-12 text-gray-400">
+            <span className="material-symbols-outlined text-4xl mb-2">event_busy</span>
+            <p>Nenhum relatório encontrado.</p>
+          </div>
+        ) : rdos.map(rdo => (
           <article
             key={rdo.id}
             onClick={() => handleOpenModal(rdo)}

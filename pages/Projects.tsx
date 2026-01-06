@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { DOCUMENTS, PROJECTS } from '../constants';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { ConstructionDocument, Project, ProjectStatus } from '../types';
 import ConfirmModal from '../components/ConfirmModal';
+import { supabase } from '../lib/supabase';
 
 const Projects: React.FC = () => {
   const navigate = useNavigate();
@@ -13,14 +14,39 @@ const Projects: React.FC = () => {
 
   const [activeTab, setActiveTab] = useState('Todos');
   const [docToDelete, setDocToDelete] = useState<string | null>(null);
-  const [documents, setDocuments] = useState<ConstructionDocument[]>(() => {
-    const savedDocs = localStorage.getItem('construction_documents');
-    return savedDocs ? JSON.parse(savedDocs) : DOCUMENTS;
-  });
+  const [loadingDocs, setLoadingDocs] = useState(true);
+  const [documents, setDocuments] = useState<ConstructionDocument[]>([]);
 
-  React.useEffect(() => {
-    localStorage.setItem('construction_documents', JSON.stringify(documents));
-  }, [documents]);
+  useEffect(() => {
+    fetchDocuments();
+  }, [project.id]);
+
+  const fetchDocuments = async () => {
+    try {
+      setLoadingDocs(true);
+      const { data, error } = await supabase
+        .from('construction_documents')
+        .select('*')
+        .eq('project_id', project.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      if (data) {
+        setDocuments(data.map(d => ({
+          id: d.id,
+          name: d.name,
+          date: new Date(d.date).toLocaleDateString('pt-BR'),
+          author: d.author,
+          type: d.type as any
+        })));
+      }
+    } catch (error) {
+      console.error('Error fetching documents:', error);
+    } finally {
+      setLoadingDocs(false);
+    }
+  };
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [newDoc, setNewDoc] = useState({
     name: '',
@@ -35,11 +61,7 @@ const Projects: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editedProject, setEditedProject] = useState<Project>(project);
 
-  // All projects for persistence
-  const [allProjects, setAllProjects] = useState<Project[]>(() => {
-    const saved = localStorage.getItem('projects');
-    return saved ? JSON.parse(saved) : PROJECTS;
-  });
+  // Sync editedProject with current project if navigation happens
 
   // Sync editedProject with current project if navigation happens
   React.useEffect(() => {
@@ -47,18 +69,24 @@ const Projects: React.FC = () => {
     setProjectImage(project.image);
   }, [project]);
 
-  const handleSaveProjectEdit = () => {
-    const updatedProjects = allProjects.map(p =>
-      p.id === project.id ? editedProject : p
-    );
-    setAllProjects(updatedProjects);
-    localStorage.setItem('projects', JSON.stringify(updatedProjects));
-    setIsEditModalOpen(false);
+  const handleSaveProjectEdit = async () => {
+    try {
+      const { error } = await supabase
+        .from('projects')
+        .update({
+          name: editedProject.name,
+          location: editedProject.location,
+          maps_url: editedProject.mapsUrl
+        })
+        .eq('id', project.id);
 
-    // Update local display if needed (though location.state stays same)
-    // For a better UX, we might need a context or global state, 
-    // but here we rely on the fact that we edit the local 'editedProject' 
-    // and use THAT for display in this page.
+      if (error) throw error;
+      setIsEditModalOpen(false);
+      // We could navigate back or just stay here with updated state
+    } catch (error) {
+      console.error('Error updating project:', error);
+      alert('Erro ao salvar alterações.');
+    }
   };
 
   const tabs = ['Todos', 'Plantas', 'Contratos', 'Relatórios'];
@@ -100,16 +128,31 @@ const Projects: React.FC = () => {
     setIsModalOpen(true);
   };
 
-  const handleUpload = () => {
-    const doc: ConstructionDocument = {
-      id: Date.now().toString(),
-      name: newDoc.name,
-      date: new Date().toLocaleDateString('pt-BR'),
-      author: newDoc.author,
-      type: newDoc.type
-    };
-    setDocuments([doc, ...documents]);
-    setIsModalOpen(false);
+  const handleUpload = async () => {
+    try {
+      const docData = {
+        project_id: project.id,
+        name: newDoc.name,
+        author: newDoc.author,
+        type: newDoc.type,
+        date: new Date().toISOString().split('T')[0] // YYYY-MM-DD
+      };
+
+      const { data, error } = await supabase
+        .from('construction_documents')
+        .insert([docData])
+        .select();
+
+      if (error) throw error;
+
+      if (data) {
+        fetchDocuments();
+        setIsModalOpen(false);
+      }
+    } catch (error) {
+      console.error('Error uploading document:', error);
+      alert('Erro ao enviar documento.');
+    }
   };
 
   const handleDeleteClick = (id: string, e: React.MouseEvent) => {
@@ -117,10 +160,21 @@ const Projects: React.FC = () => {
     setDocToDelete(id);
   };
 
-  const confirmDeleteDoc = () => {
+  const confirmDeleteDoc = async () => {
     if (docToDelete) {
-      setDocuments(prev => prev.filter(doc => doc.id !== docToDelete));
-      setDocToDelete(null);
+      try {
+        const { error } = await supabase
+          .from('construction_documents')
+          .delete()
+          .eq('id', docToDelete);
+
+        if (error) throw error;
+        setDocuments(prev => prev.filter(doc => doc.id !== docToDelete));
+        setDocToDelete(null);
+      } catch (error) {
+        console.error('Error deleting document:', error);
+        alert('Erro ao excluir documento.');
+      }
     }
   };
 
@@ -250,10 +304,24 @@ const Projects: React.FC = () => {
             <div className="w-[1px] h-6 bg-gray-200 dark:bg-white/10 mx-1 flex-shrink-0"></div>
             {/* RDO Button */}
             <button
-              onClick={() => navigate('/rdo')}
+              onClick={() => navigate('/rdo', { state: { project } })}
               className="flex-shrink-0 flex items-center justify-center px-4 py-2 rounded-full bg-cyan-brand/10 text-cyan-brand border border-cyan-brand/20 active:scale-95 transition-all text-sm font-bold whitespace-nowrap"
             >
               RDO
+            </button>
+            {/* Contratos Button */}
+            <button
+              onClick={() => navigate('/contracts', { state: { project } })}
+              className="flex-shrink-0 flex items-center justify-center px-4 py-2 rounded-full bg-primary/10 text-primary border border-primary/20 active:scale-95 transition-all text-sm font-bold whitespace-nowrap"
+            >
+              Contratos
+            </button>
+            {/* Compras Button */}
+            <button
+              onClick={() => navigate('/purchases', { state: { project } })}
+              className="flex-shrink-0 flex items-center justify-center px-4 py-2 rounded-full bg-indigo-500/10 text-indigo-500 border border-indigo-500/20 active:scale-95 transition-all text-sm font-bold whitespace-nowrap"
+            >
+              Compras
             </button>
             {/* Galeria Button */}
             <button
@@ -284,7 +352,12 @@ const Projects: React.FC = () => {
         </div>
 
         <section className="flex flex-col px-4 gap-3">
-          {filteredDocuments.length === 0 ? (
+          {loadingDocs ? (
+            <div className="flex flex-col items-center justify-center py-12 text-gray-400">
+              <span className="material-symbols-outlined animate-spin text-4xl mb-2">sync</span>
+              <p>Carregando documentos...</p>
+            </div>
+          ) : filteredDocuments.length === 0 ? (
             <div className="text-center py-8 text-gray-400">
               <span className="material-symbols-outlined text-4xl mb-2">folder_off</span>
               <p>Nenhum documento encontrado.</p>
