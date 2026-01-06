@@ -39,7 +39,8 @@ const Projects: React.FC = () => {
           date: new Date(d.date).toLocaleDateString('pt-BR'),
           author: d.author,
           type: d.type as any,
-          fileUrl: d.file_url
+          fileUrl: d.file_url,
+          category: d.category || 'Todos' // Categoria padrão se não existir
         })));
       }
     } catch (error) {
@@ -118,10 +119,9 @@ const Projects: React.FC = () => {
 
   const filteredDocuments = documents.filter(doc => {
     if (activeTab === 'Todos') return true;
-    if (activeTab === 'Plantas') return doc.type === 'dwg' || doc.name.toLowerCase().includes('planta') || doc.name.toLowerCase().includes('projeto');
-    if (activeTab === 'Contratos') return doc.type === 'pdf' || doc.name.toLowerCase().includes('contrato');
-    if (activeTab === 'Relatórios') return doc.type === 'xlsx' || doc.name.toLowerCase().includes('relatório') || doc.name.toLowerCase().includes('orçamento');
-    return true;
+
+    // Filtra pela categoria (aba onde foi criado)
+    return doc.category === activeTab;
   });
 
 
@@ -216,7 +216,8 @@ const Projects: React.FC = () => {
         author: newDoc.author,
         type: newDoc.type,
         date: new Date().toISOString().split('T')[0],
-        file_url: publicUrl
+        file_url: publicUrl,
+        category: activeTab // Salva a aba onde foi criado
       };
 
       const { error } = await supabase
@@ -545,7 +546,21 @@ const Projects: React.FC = () => {
                     const file = e.target.files?.[0];
                     if (file) {
                       setNewDocFile(file);
-                      if (!newDoc.name) setNewDoc({ ...newDoc, name: file.name.split('.')[0] });
+
+                      // Auto-detect file type from extension
+                      const ext = file.name.split('.').pop()?.toLowerCase();
+                      let detectedType: 'pdf' | 'dwg' | 'xlsx' | 'jpg' = 'pdf';
+
+                      if (ext === 'pdf') detectedType = 'pdf';
+                      else if (ext === 'dwg') detectedType = 'dwg';
+                      else if (ext === 'xlsx' || ext === 'xls') detectedType = 'xlsx';
+                      else if (ext === 'jpg' || ext === 'jpeg' || ext === 'png') detectedType = 'jpg';
+
+                      setNewDoc({
+                        ...newDoc,
+                        type: detectedType,
+                        name: newDoc.name || file.name.split('.')[0]
+                      });
                     }
                   }}
                 />

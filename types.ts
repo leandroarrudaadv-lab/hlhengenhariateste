@@ -34,6 +34,7 @@ export interface ConstructionDocument {
   author: string;
   type: 'pdf' | 'dwg' | 'xlsx' | 'jpg';
   fileUrl?: string;
+  category?: string;
 }
 
 export interface Contract {
