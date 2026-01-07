@@ -98,39 +98,58 @@ const Collaborators: React.FC = () => {
                         <p>Nenhum colaborador encontrado.</p>
                     </div>
                 ) : (
-                    collaborators.map((collaborator) => (
-                        <div
-                            key={collaborator.id}
-                            className="flex flex-col bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-white/5"
-                        >
-                            <div className="flex items-start gap-4">
-                                <img
-                                    src={collaborator.photo}
-                                    alt={collaborator.name}
-                                    className="w-16 h-16 rounded-full object-cover border-2 border-primary/20 cursor-pointer"
-                                    onClick={() => navigate(`/collaborator/${collaborator.id}`)}
-                                />
-                                <div
-                                    className="flex-1 min-w-0 cursor-pointer"
-                                    onClick={() => navigate(`/collaborator/${collaborator.id}`)}
-                                >
-                                    <h3 className="font-bold text-lg leading-tight truncate">{collaborator.name}</h3>
-                                    <p className="text-cyan-brand font-medium text-sm">{collaborator.role}</p>
-                                    <div className="flex items-center gap-1 mt-1 text-xs text-gray-500 dark:text-gray-400">
-                                        <span className="material-symbols-outlined text-[14px]">apartment</span>
-                                        <span>{collaborator.currentProject || 'Sem alocação'}</span>
+                    <>
+                        {collaborators.map((collaborator) => (
+                            <div
+                                key={collaborator.id}
+                                className="flex flex-col bg-white dark:bg-surface-dark rounded-xl p-4 shadow-sm border border-gray-100 dark:border-white/5"
+                            >
+                                <div className="flex items-start gap-4">
+                                    <img
+                                        src={collaborator.photo}
+                                        alt={collaborator.name}
+                                        className="w-16 h-16 rounded-full object-cover border-2 border-primary/20 cursor-pointer"
+                                        onClick={() => navigate(`/collaborator/${collaborator.id}`)}
+                                    />
+                                    <div
+                                        className="flex-1 min-w-0 cursor-pointer"
+                                        onClick={() => navigate(`/collaborator/${collaborator.id}`)}
+                                    >
+                                        <h3 className="font-bold text-lg leading-tight truncate">{collaborator.name}</h3>
+                                        <div className="flex justify-between items-center">
+                                            <p className="text-cyan-brand font-medium text-sm">{collaborator.role}</p>
+                                            <p className="font-bold text-primary">{collaborator.salary}</p>
+                                        </div>
+                                        <div className="flex items-center gap-1 mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                            <span className="material-symbols-outlined text-[14px]">apartment</span>
+                                            <span>{collaborator.currentProject || 'Sem alocação'}</span>
+                                        </div>
                                     </div>
+                                    <button
+                                        type="button"
+                                        onClick={() => handleDeleteClick(collaborator.id)}
+                                        className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                                    >
+                                        <span className="material-symbols-outlined">delete</span>
+                                    </button>
                                 </div>
-                                <button
-                                    type="button"
-                                    onClick={() => handleDeleteClick(collaborator.id)}
-                                    className="text-gray-400 hover:text-red-500 transition-colors p-1"
-                                >
-                                    <span className="material-symbols-outlined">delete</span>
-                                </button>
+                            </div>
+                        ))}
+
+                        {/* Total Value Day Sum */}
+                        <div className="mt-4 p-5 bg-primary/10 dark:bg-primary/20 rounded-2xl border-2 border-dashed border-primary/30 flex flex-col items-center justify-center gap-1">
+                            <span className="text-xs font-bold text-primary uppercase tracking-widest">Gasto Diário Equipe</span>
+                            <div className="flex items-baseline gap-2">
+                                <span className="text-sm font-medium text-gray-500">TOTAL VALOR DIA</span>
+                                <span className="text-2xl font-black text-primary">
+                                    R$ {collaborators.reduce((acc, curr) => {
+                                        const value = parseFloat(curr.salary.replace(/[^0-9,]/g, '').replace(',', '.')) || 0;
+                                        return acc + value;
+                                    }, 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                </span>
                             </div>
                         </div>
-                    ))
+                    </>
                 )}
             </main>
 
