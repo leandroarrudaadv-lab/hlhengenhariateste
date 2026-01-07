@@ -270,16 +270,14 @@ const Dashboard: React.FC = () => {
                   >
                     <span className="material-symbols-outlined text-[18px]">delete</span>
                   </button>
-                  <button
-                    onClick={(e) => toggleProjectStatus(e, project.id, project.status)}
-                    className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset transition-colors z-10 hover:opacity-80 active:scale-95 ${project.status === ProjectStatus.IN_PROGRESS
+                  <span
+                    className={`inline-flex items-center rounded-md px-2 py-1 text-xs font-medium ring-1 ring-inset ${project.status === ProjectStatus.IN_PROGRESS
                       ? 'bg-cyan-brand/10 text-cyan-brand ring-cyan-brand/20'
                       : 'bg-green-500/10 text-green-500 ring-green-500/20'
                       }`}
                   >
                     {project.status}
-                    <span className="material-symbols-outlined text-[14px] ml-1">edit</span>
-                  </button>
+                  </span>
                 </div>
               </div>
               <div className="mt-1">
