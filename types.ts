@@ -67,4 +67,6 @@ export interface RDO {
   weather: string;
   workers: number;
   hasIssue?: boolean;
+  attendance?: string[];
+  fullDate?: string;
 }

@@ -4,6 +4,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import ConfirmModal from '../components/ConfirmModal';
 import { Project, RDO, ProjectStatus } from '../types';
 import { supabase } from '../lib/supabase';
+import { useCollaborators } from '../contexts/CollaboratorContext';
 
 const RDOPage: React.FC = () => {
   const navigate = useNavigate();
@@ -13,10 +14,15 @@ const RDOPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [rdos, setRdos] = useState<RDO[]>([]);
   const [progress, setProgress] = useState(project?.progress || 0);
+  const { collaborators, fetchCollaborators } = useCollaborators();
+
+  // Filter collaborators that belong to this project
+  const projectCollaborators = collaborators.filter(c => c.currentProjectId === project?.id);
 
   useEffect(() => {
     if (project?.id) {
       fetchRdos();
+      fetchCollaborators();
     }
   }, [project?.id]);
 
@@ -44,6 +50,7 @@ const RDOPage: React.FC = () => {
             weather: r.weather,
             workers: r.workers,
             hasIssue: r.has_issue,
+            attendance: r.attendance || [],
             fullDate: r.full_date
           } as RDO;
         }));
@@ -59,6 +66,7 @@ const RDOPage: React.FC = () => {
   const [rdoToDelete, setRdoToDelete] = useState<string | null>(null);
   const [editingRdo, setEditingRdo] = useState<Partial<RDO>>({});
   const [isEditingProgress, setIsEditingProgress] = useState(false);
+  const [attendanceSearch, setAttendanceSearch] = useState('');
 
   const handleOpenModal = (rdo?: RDO) => {
     if (rdo) {
@@ -69,9 +77,11 @@ const RDOPage: React.FC = () => {
         weather: 'Ensolarado',
         workers: 0,
         hasIssue: false,
+        attendance: [],
         fullDate: new Date().toISOString().split('T')[0]
       });
     }
+    setAttendanceSearch('');
     setIsModalOpen(true);
   };
 
@@ -107,8 +117,9 @@ const RDOPage: React.FC = () => {
         status: editingRdo.status,
         description: editingRdo.description,
         weather: editingRdo.weather,
-        workers: editingRdo.workers,
-        has_issue: editingRdo.hasIssue
+        workers: editingRdo.attendance?.length || 0,
+        has_issue: editingRdo.hasIssue,
+        attendance: editingRdo.attendance || []
       };
 
       if (editingRdo.id) {
@@ -308,10 +319,20 @@ const RDOPage: React.FC = () => {
               {rdo.description}
             </p>
             <div className="flex items-center justify-between mt-1">
-              <div className="flex -space-x-2 overflow-hidden">
-                <img className="inline-block h-6 w-6 rounded-full ring-2 ring-white dark:ring-surface-dark object-cover" src="https://picsum.photos/seed/eng1/50/50" alt="" />
-                <img className="inline-block h-6 w-6 rounded-full ring-2 ring-white dark:ring-surface-dark object-cover" src="https://picsum.photos/seed/eng2/50/50" alt="" />
-                <div className="h-6 w-6 rounded-full ring-2 ring-white dark:ring-surface-dark bg-slate-100 dark:bg-white/10 flex items-center justify-center text-[10px] font-bold text-slate-500">+3</div>
+              <div className="flex items-center gap-2">
+                <div className="flex -space-x-2 overflow-hidden">
+                  {projectCollaborators.filter(c => rdo.attendance?.includes(c.id)).slice(0, 3).map(c => (
+                    <img key={c.id} className="inline-block h-6 w-6 rounded-full ring-2 ring-white dark:ring-surface-dark object-cover" src={c.photo} alt={c.name} />
+                  ))}
+                  {rdo.attendance && rdo.attendance.length > 3 && (
+                    <div className="h-6 w-6 rounded-full ring-2 ring-white dark:ring-surface-dark bg-slate-100 dark:bg-white/10 flex items-center justify-center text-[10px] font-bold text-slate-500">
+                      +{rdo.attendance.length - 3}
+                    </div>
+                  )}
+                </div>
+                {(!rdo.attendance || rdo.attendance.length === 0) && rdo.workers > 0 && (
+                  <span className="text-[10px] text-slate-400 font-medium">{rdo.workers} funcionários (manual)</span>
+                )}
               </div>
               <div className="flex items-center text-primary text-sm font-medium group-hover:translate-x-1 transition-transform">
                 Detalhes <span className="material-symbols-outlined text-lg ml-1">arrow_forward</span>
@@ -371,28 +392,98 @@ const RDOPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* Weather & Workers */}
-              <div className="flex gap-4">
-                <div className="flex-1">
-                  <label className="text-xs font-bold text-gray-500 uppercase">Clima</label>
-                  <select
-                    value={editingRdo.weather}
-                    onChange={(e) => setEditingRdo({ ...editingRdo, weather: e.target.value })}
-                    className="w-full mt-1 p-3 rounded-xl bg-gray-50 dark:bg-zinc-800 text-slate-800 dark:text-white border border-gray-200 dark:border-white/10 outline-none focus:ring-2 focus:ring-primary/50 appearance-none"
-                  >
-                    <option value="Ensolarado">Ensolarado ☀️</option>
-                    <option value="Nublado">Nublado ☁️</option>
-                    <option value="Chuvoso">Chuvoso 🌧️</option>
-                  </select>
+              {/* Weather */}
+              <div className="flex-1">
+                <label className="text-xs font-bold text-gray-500 uppercase ml-1">Clima</label>
+                <select
+                  value={editingRdo.weather}
+                  onChange={(e) => setEditingRdo({ ...editingRdo, weather: e.target.value })}
+                  className="w-full mt-1 p-3 rounded-xl bg-gray-50 dark:bg-zinc-800 text-slate-800 dark:text-white border border-gray-200 dark:border-white/10 outline-none focus:ring-2 focus:ring-primary/50 appearance-none"
+                >
+                  <option value="Ensolarado">Ensolarado ☀️</option>
+                  <option value="Nublado">Nublado ☁️</option>
+                  <option value="Chuvoso">Chuvoso 🌧️</option>
+                </select>
+              </div>
+
+              {/* Attendance List */}
+              <div>
+                <div className="flex justify-between items-center mb-2 px-1">
+                  <label className="text-xs font-bold text-gray-500 uppercase">Lista de Chamada</label>
+                  <span className="text-xs font-bold text-primary bg-primary/10 px-2 py-0.5 rounded-full">
+                    {editingRdo.attendance?.length || 0} PRESENTES
+                  </span>
                 </div>
-                <div className="flex-1">
-                  <label className="text-xs font-bold text-gray-500 uppercase">Funcionários</label>
+
+                {/* Search in attendance */}
+                <div className="relative mb-2">
+                  <span className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
+                    <span className="material-symbols-outlined text-[18px]">person_search</span>
+                  </span>
                   <input
-                    type="number"
-                    value={editingRdo.workers}
-                    onChange={(e) => setEditingRdo({ ...editingRdo, workers: parseInt(e.target.value) || 0 })}
-                    className="w-full mt-1 p-3 rounded-xl bg-gray-50 dark:bg-zinc-800 text-slate-800 dark:text-white border border-gray-200 dark:border-white/10 focus:ring-2 focus:ring-primary/50 outline-none transition-all"
+                    type="text"
+                    value={attendanceSearch}
+                    onChange={(e) => setAttendanceSearch(e.target.value)}
+                    placeholder="Pesquisar colaborador..."
+                    className="w-full pl-9 pr-3 py-2 rounded-xl bg-gray-50 dark:bg-white/5 border border-gray-100 dark:border-white/5 text-xs outline-none focus:ring-2 focus:ring-primary/50"
                   />
+                </div>
+
+                <div className="bg-gray-50 dark:bg-white/5 rounded-2xl border border-gray-100 dark:border-white/5 overflow-hidden">
+                  <div className="max-h-60 overflow-y-auto divide-y divide-gray-100 dark:divide-white/5">
+                    {(() => {
+                      const searchLower = attendanceSearch.toLowerCase();
+                      const filtered = collaborators.filter(c =>
+                        c.name.toLowerCase().includes(searchLower) ||
+                        c.role.toLowerCase().includes(searchLower)
+                      ).sort((a, b) => {
+                        const aInProject = a.currentProjectId === project?.id;
+                        const bInProject = b.currentProjectId === project?.id;
+                        if (aInProject && !bInProject) return -1;
+                        if (!aInProject && bInProject) return 1;
+                        return a.name.localeCompare(b.name);
+                      });
+
+                      if (filtered.length === 0) {
+                        return (
+                          <div className="p-4 text-center text-xs text-gray-400 italic">
+                            Nenhum colaborador encontrado para "{attendanceSearch}"
+                          </div>
+                        );
+                      }
+
+                      return filtered.map(c => {
+                        const isAllocated = c.currentProjectId === project?.id;
+                        return (
+                          <label key={c.id} className="flex items-center gap-3 p-3 hover:bg-black/5 dark:hover:bg-white/5 transition-colors cursor-pointer active:bg-black/10">
+                            <img src={c.photo} alt="" className="w-8 h-8 rounded-full object-cover shadow-sm" />
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-1">
+                                <p className="text-sm font-bold truncate">{c.name}</p>
+                                {isAllocated && (
+                                  <span className="text-[8px] bg-cyan-brand/10 text-cyan-brand px-1 rounded font-bold">EQUIPE</span>
+                                )}
+                              </div>
+                              <p className="text-[10px] text-gray-500 dark:text-gray-400 uppercase">{c.role}</p>
+                            </div>
+                            <input
+                              type="checkbox"
+                              checked={editingRdo.attendance?.includes(c.id)}
+                              onChange={(e) => {
+                                const currentAttendance = editingRdo.attendance || [];
+                                if (e.target.checked) {
+                                  setEditingRdo({ ...editingRdo, attendance: [...currentAttendance, c.id] });
+                                } else {
+                                  setEditingRdo({ ...editingRdo, attendance: currentAttendance.filter(id => id !== c.id) });
+                                }
+                              }}
+                              className="w-5 h-5 rounded-lg border-gray-300 text-primary focus:ring-primary/50"
+                            />
+                          </label>
+                        );
+                      });
+                    })()}
+                  </div>
                 </div>
               </div>
 

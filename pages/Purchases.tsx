@@ -4,6 +4,7 @@ import { PURCHASES } from '../constants';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { Project, Purchase } from '../types';
 import { supabase } from '../lib/supabase';
+import ConfirmModal from '../components/ConfirmModal';
 
 const Purchases: React.FC = () => {
   const navigate = useNavigate();
@@ -22,6 +23,7 @@ const Purchases: React.FC = () => {
     category: 'Material',
     status: 'Pendente'
   });
+  const [purchaseToDelete, setPurchaseToDelete] = useState<string | null>(null);
 
   useEffect(() => {
     fetchPurchases();
@@ -71,15 +73,19 @@ const Purchases: React.FC = () => {
     if (!project?.id) return;
     try {
       setSaving(true);
+
+      // Limpa o valor para salvar apenas números e vírgula se necessário, ou formata como número
+      let rawPrice = newPurchase.price.replace('R$', '').trim();
+
       const { error } = await supabase
         .from('purchases')
         .insert([{
           project_id: project.id,
           item: newPurchase.item,
           supplier: newPurchase.supplier || 'N/A',
-          price: newPurchase.price,
+          price: rawPrice,
           category: newPurchase.category,
-          status: 'Pendente',
+          status: 'Pago', // Mudando padrão para Pago já que vamos remover o badge de pendente
           date: new Date().toISOString().split('T')[0]
         }]);
 
@@ -98,6 +104,24 @@ const Purchases: React.FC = () => {
       console.error('Error adding purchase:', error);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const confirmDeletePurchase = async () => {
+    if (!purchaseToDelete) return;
+    try {
+      const { error } = await supabase
+        .from('purchases')
+        .delete()
+        .eq('id', purchaseToDelete);
+
+      if (error) throw error;
+
+      setPurchases(purchases.filter(p => p.id !== purchaseToDelete));
+      setPurchaseToDelete(null);
+    } catch (error) {
+      console.error('Error deleting purchase:', error);
+      alert('Erro ao excluir compra');
     }
   };
 
@@ -167,7 +191,7 @@ const Purchases: React.FC = () => {
             filteredPurchases.map(item => (
               <article
                 key={item.id}
-                className="group relative flex items-center gap-4 rounded-xl bg-white dark:bg-surface-dark p-4 shadow-sm border border-gray-100 dark:border-white/5 transition-all hover:border-primary/50 active:scale-[0.99] cursor-pointer"
+                className="group relative flex items-center gap-4 rounded-xl bg-white dark:bg-surface-dark p-4 shadow-sm border border-gray-100 dark:border-white/5 transition-all hover:border-primary/50"
               >
                 <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-full ${item.category === 'Locação' ? 'bg-blue-500/10 text-blue-500' :
                   item.id === '4' ? 'bg-purple-500/10 text-purple-500' :
@@ -181,20 +205,24 @@ const Purchases: React.FC = () => {
                 <div className="flex flex-1 flex-col justify-center min-w-0">
                   <div className="flex justify-between items-start">
                     <h5 className="font-semibold truncate pr-2">{item.item}</h5>
-                    <span className="font-bold whitespace-nowrap">{item.price}</span>
+                    <span className="font-bold whitespace-nowrap text-primary">R$ {item.price}</span>
                   </div>
                   <div className="flex justify-between items-end mt-1">
                     <div className="flex flex-col">
                       <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{item.supplier}</p>
                       <p className="text-xs text-gray-400 dark:text-gray-500">{item.date}</p>
                     </div>
-                    <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${item.status === 'Pago' ? 'bg-cyan-brand/10 text-cyan-brand' : 'bg-yellow-500/10 text-yellow-500'
-                      }`}>
-                      {item.status}
-                    </span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setPurchaseToDelete(item.id);
+                      }}
+                      className="flex size-8 items-center justify-center rounded-full bg-red-50 dark:bg-red-900/10 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 transition-colors"
+                    >
+                      <span className="material-symbols-outlined text-[18px]">delete</span>
+                    </button>
                   </div>
                 </div>
-                <span className="material-symbols-outlined text-gray-400">chevron_right</span>
               </article>
             ))
           )}
@@ -282,6 +310,16 @@ const Purchases: React.FC = () => {
             </div>
           </div>
         </div>
+      )}
+      {purchaseToDelete && (
+        <ConfirmModal
+          isOpen={!!purchaseToDelete}
+          title="Excluir Compra"
+          message="Tem certeza que deseja excluir esta compra? Esta ação não pode ser desfeita."
+          onConfirm={confirmDeletePurchase}
+          onCancel={() => setPurchaseToDelete(null)}
+          confirmText="Excluir"
+        />
       )}
     </div>
   );

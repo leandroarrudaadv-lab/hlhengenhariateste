@@ -294,9 +294,6 @@ const Dashboard: React.FC = () => {
               </div>
               <div className="flex items-center justify-between mt-1 pt-3 border-t border-gray-100 dark:border-white/5">
                 <div className="flex -space-x-2 overflow-hidden">
-                  <img className="inline-block size-6 rounded-full ring-2 ring-white dark:ring-surface-dark" src="https://picsum.photos/seed/p1/50/50" alt="" />
-                  <img className="inline-block size-6 rounded-full ring-2 ring-white dark:ring-surface-dark" src="https://picsum.photos/seed/p2/50/50" alt="" />
-                  <div className="flex items-center justify-center size-6 rounded-full ring-2 ring-white dark:ring-surface-dark bg-gray-200 dark:bg-white/10 text-[10px] font-bold text-gray-500">+3</div>
                 </div>
                 <button className="text-xs font-semibold flex items-center group-hover:text-primary transition-colors">
                   Detalhes <span className="material-symbols-outlined ml-1 text-[16px]">arrow_forward</span>
