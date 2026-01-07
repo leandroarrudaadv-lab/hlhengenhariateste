@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { RDOS } from '../constants';
 import { useNavigate, useLocation } from 'react-router-dom';
 import ConfirmModal from '../components/ConfirmModal';
-import { Project, RDO } from '../types';
+import { Project, RDO, ProjectStatus } from '../types';
 import { supabase } from '../lib/supabase';
 
 const RDOPage: React.FC = () => {
@@ -140,10 +140,19 @@ const RDOPage: React.FC = () => {
 
     if (project?.id) {
       try {
+        // Atualiza o progresso
         await supabase
           .from('projects')
           .update({ progress: value })
           .eq('id', project.id);
+
+        // Se chegou a 100%, muda automaticamente para Concluída
+        if (value === 100) {
+          await supabase
+            .from('projects')
+            .update({ status: ProjectStatus.COMPLETED })
+            .eq('id', project.id);
+        }
       } catch (error) {
         console.error('Error updating project progress:', error);
       }
